@@ -142,7 +142,11 @@ export function ChatPanel({ ws, onOpen, injected }: { ws: Workspace; onOpen: (id
         setMsgs((m) => [...m, { id: seq++, role: "bot", text: j.answer || "I couldn't find that in the records.", source: "ai", model: j.model, focus: ids.slice(0, 6).map((id) => ({ id, status: result.decisions[id].status, headline: result.decisions[id].headline })) }]);
       }
     } catch {
-      if (p.appIds.length) setMsgs((m) => [...m, { ...engineAnswer(p.appIds), source: "fallback" }]);
+      const st = p.filter?.status ? statusFromWord(p.filter.status) : null;
+      if (st) {
+        const ids = result.order.filter((id) => result.decisions[id].status === st);
+        setMsgs((m) => [...m, { id: seq++, role: "bot", source: "fallback", text: ids.length ? ids.map((id) => `• ${id} ${names[id] ?? ""} — ${result.decisions[id].headline} ${result.decisions[id].nextSteps[0] ?? ""}`).join("\n") : "None." }]);
+      } else if (p.appIds.length) setMsgs((m) => [...m, { ...engineAnswer(p.appIds), source: "fallback" }]);
       else
         setMsgs((m) => [
           ...m,
