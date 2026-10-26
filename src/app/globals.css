@@ -234,6 +234,8 @@ textarea.paste:focus { border-color: var(--accent); }
 .mapwrap { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(280px, .95fr); gap: 14px; }
 .map { position: relative; background: var(--surface); border-radius: var(--r); border: 1px solid var(--line); overflow: hidden; box-shadow: var(--shadow); }
 .map svg.k { width: 100%; height: auto; max-height: 72vh; display: block; }
+.kland { fill: color-mix(in srgb, var(--accent) 10%, var(--surface2)); }
+.klines { fill: color-mix(in srgb, var(--ink) 38%, var(--line)); }
 .kpoly { fill: color-mix(in srgb, var(--accent) 8%, var(--surface2)); stroke: color-mix(in srgb, var(--ink) 25%, var(--line)); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .cnode { cursor: pointer; }
 .cnode .drop { animation: drop .7s cubic-bezier(.3,.8,.3,1) both; animation-delay: calc(var(--i) * 110ms + 200ms); transform-box: fill-box; }
