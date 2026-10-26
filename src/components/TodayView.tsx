@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import { Ic } from "./Icon";
-import { Card, Chip, Ring, TierBadge, useUi } from "./kit";
+import { Card, Chip, CountUp, Ring, TierBadge, useUi } from "./kit";
 import { itemsFor, type Item } from "./Modals";
 import { active, countBy, spotIds } from "@/lib/desk/model";
 import { ago } from "@/lib/desk/time";
@@ -91,7 +91,7 @@ function Kpi({ i, s, icon, label, n, sub, onClick }: { i: number; s: string; ico
   return (
     <button className="card hov rise bucket kpi" data-s={s} style={{ "--i": i, textAlign: "left" } as CSSProperties} onClick={onClick}>
       <div className="row"><span className="ic"><Ic n={icon} /></span><span className="sp" /><span className="eyebrow">{label}</span></div>
-      <span className="num">{n}</span>
+      <CountUp className="num" to={n} />
       <span className="dl">{sub}</span>
     </button>
   );
