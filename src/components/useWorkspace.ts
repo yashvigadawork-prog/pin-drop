@@ -176,7 +176,8 @@ export function useWorkspace() {
         if (!input.applications.length) throw new Error("No applications found. Is this the Case 1 template (Applications sheet with an 'Application ID' header)?");
         await loadInput(input, file.name, { extras: readExtras(new Uint8Array(buf)) });
       } catch (e) {
-        setError((e as Error).message);
+        const m = (e as Error).message;
+        setError(/zip|unsupported|corrupt|invalid|signature|cfb/i.test(m) ? "That file could not be read as Excel. Please upload the .xlsx template." : m);
       } finally {
         setLoading(false);
       }

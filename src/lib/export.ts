@@ -4,7 +4,8 @@ import type { AuditEvent } from "@/components/useWorkspace";
 import type { Row } from "./desk/model";
 import { MAIL_LABEL, STAGES, UI_META, type Desk, type ExpPerson } from "./desk/types";
 
-export function exportWorkbook(result: EngineResult, input: EngineInput, audit: AuditEvent[], fileName: string, rows: Row[], desk: Desk, exp: ExpPerson[]) {
+// Built apart from the download so a test can check every sheet is valid (Excel reserves names like "History").
+export function buildWorkbook(result: EngineResult, input: EngineInput, audit: AuditEvent[], rows: Row[], desk: Desk, exp: ExpPerson[]) {
   const rec = rows.map((r) => {
     const d = r.d;
     return {
@@ -17,6 +18,7 @@ export function exportWorkbook(result: EngineResult, input: EngineInput, audit: 
       "Your decision": r.move ? `Moved: ${r.move.reason}` : d.ownerOverride ? `${d.ownerOverride.action}: ${d.ownerOverride.reason}` : "",
       "Moved on to": r.moved === "onb" ? "Onboarding" : r.moved === "closed" ? "Closed" : r.moved === "exp" ? "Expansion list" : "",
       "Fit score": r.fit,
+      Tier: r.tier ?? "",
       "Offer strength if moved": r.offer ?? "",
       Territory: d.territoryId ?? "",
       "Slot / offer": d.allocation ? `${d.allocation.territoryId} · ${d.allocation.pin}${d.allocation.kind === "redirect" ? " (offer)" : ""}${d.allocation.locked ? " (locked)" : ""}` : "",
@@ -53,12 +55,17 @@ export function exportWorkbook(result: EngineResult, input: EngineInput, audit: 
   const log = audit.map((e) => ({ Time: e.at, Type: e.kind, Change: e.summary, Effect: e.changes.map((c) => `${c.id}: ${c.from} → ${c.to}${c.toAlloc ? ` (${c.toAlloc})` : ""}`).join("; ") }));
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rec);
-  ws["!cols"] = [10, 18, 14, 10, 14, 14, 24, 14, 8, 10, 10, 18, 40, 70, 60, 50, 12, 14, 18, 10, 22, 30].map((w) => ({ wch: w }));
+  ws["!cols"] = [10, 18, 14, 10, 14, 14, 24, 14, 8, 6, 10, 10, 18, 40, 70, 60, 50, 12, 14, 18, 10, 22, 30].map((w) => ({ wch: w }));
   XLSX.utils.book_append_sheet(wb, ws, "Recommendations");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(terr), "Territories");
   if (onb.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(onb), "Onboarding");
   if (expRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(expRows), "Expansion list");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(log), "History");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(log), "Change log");
   void input;
+  return wb;
+}
+
+export function exportWorkbook(result: EngineResult, input: EngineInput, audit: AuditEvent[], fileName: string, rows: Row[], desk: Desk, exp: ExpPerson[]) {
+  const wb = buildWorkbook(result, input, audit, rows, desk, exp);
   XLSX.writeFile(wb, `pin-drop-${fileName.replace(/\.xlsx?$/i, "")}.xlsx`);
 }
