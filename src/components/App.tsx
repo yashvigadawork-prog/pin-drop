@@ -3,16 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatPanel } from "./ChatPanel";
 import { Drawer } from "./Drawer";
-import { ExpansionView } from "./ExpansionView";
 import { Ic, Logo } from "./Icon";
 import { Landing } from "./Landing";
-import { MapView } from "./MapView";
 import { ModalHost } from "./Modals";
 import { OnboardingView } from "./OnboardingView";
 import { OverviewView } from "./OverviewView";
 import { PipelineView } from "./PipelineView";
+import { PlacesView } from "./PlacesView";
+import { RankingMenu } from "./RankingMenu";
 import { SettingsView } from "./SettingsView";
-import { TodayView } from "./TodayView";
 import { UiCtx, type DrawerTab, type ModalState, type NavState, type ReviewBucket, type Ui, type View } from "./kit";
 import { useWorkspace } from "./useWorkspace";
 import { exportWorkbook } from "@/lib/export";
@@ -21,23 +20,19 @@ import type { UiStatus } from "@/lib/desk/types";
 
 const NAV: [View, string, string][] = [
   ["overview", "bar", "Overview"],
-  ["today", "today", "Today"],
   ["pipeline", "list", "Pipeline"],
-  ["map", "map", "Map"],
-  ["expansion", "globe", "Expansion list"],
   ["onboarding", "clip", "Onboarding"],
+  ["places", "map", "Places"],
   ["settings", "sliders", "Rules and settings"],
 ];
 const TITLES: Record<View, [string, string]> = {
-  overview: ["Overview", "How the whole pipeline is doing"],
-  today: ["Today", "What needs you now"],
+  overview: ["Overview", "What needs you, and how we are doing"],
   pipeline: ["Pipeline", "Applicants still being decided"],
-  map: ["Map", "Where partners and demand sit"],
-  expansion: ["Expansion list", "People to call when we grow"],
   onboarding: ["Onboarding", "From yes to open store"],
-  settings: ["Rules and settings", "Ranking, areas, checks, safeguards"],
+  places: ["Places", "Map, territories and the expansion list"],
+  settings: ["Rules and settings", "Areas, checks, email and the rulebook"],
 };
-const NAV0: NavState = { filter: "all", q: "", sort: "fit", mode: "list", showMoved: false, terrF: null, pick: {}, setting: "phase", onb: "", expF: null, expCity: "", city: null, layers: { app: true, store: true, exp: true }, period: "week" };
+const NAV0: NavState = { filter: "all", q: "", sort: "fit", showMoved: false, terrF: null, pick: {}, setting: "areas", onb: "", expF: null, expCity: "", city: null, layers: { app: true, store: true, exp: true }, period: "week", ovTab: "now", placesTab: "terr" };
 
 function useTheme() {
   const [dark, setDark] = useState(false);
@@ -100,21 +95,26 @@ export default function App() {
   }, []);
 
   const go = useCallback<Ui["go"]>(
-    (v, o = {}) => {
+    (target, o = {}) => {
+      const v: View = target === "today" ? "overview" : target === "map" || target === "expansion" ? "places" : target;
       setView(v);
       closeAll();
       setNavState((s) => ({
         ...s,
-        ...(o.filter !== undefined ? { filter: o.filter as UiStatus | "all", terrF: null, mode: "list" as const } : {}),
+        ...(target === "today" ? { ovTab: "now" as const } : {}),
+        ...(target === "map" ? { placesTab: "terr" as const } : {}),
+        ...(target === "expansion" ? { placesTab: "exp" as const } : {}),
+        ...(o.placesTab ? { placesTab: o.placesTab } : {}),
+        ...(o.filter !== undefined ? { filter: o.filter as UiStatus | "all", terrF: null } : {}),
         ...(o.terr !== undefined ? { terrF: o.terr, filter: "all" as const } : {}),
         ...(o.showMoved !== undefined ? { showMoved: o.showMoved } : {}),
-        ...(o.mode ? { mode: o.mode } : {}),
         ...(o.onb ? { onb: o.onb } : {}),
         ...(o.settings ? { setting: o.settings } : {}),
         ...(o.expF !== undefined ? { expF: o.expF } : {}),
         ...(o.expCity ? { expCity: o.expCity } : {}),
       }));
       content.current?.scrollTo({ top: 0 });
+      if (v === "places" && target !== "map") setTimeout(() => document.getElementById("places-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
     },
     [closeAll],
   );
@@ -158,8 +158,8 @@ export default function App() {
   if (!result || !input) return <div className="pdapp"><Landing onFile={ws.uploadFile} onSample={ws.loadSample} loading={ws.loading} error={ws.error} dark={theme.dark} onTheme={theme.toggle} /></div>;
 
   const t = TITLES[view];
-  const badge = (v: View) => (v === "today" ? active(rows).filter((r) => r.ui === "adv" || r.ui === "redir").length + desk.replies.length : v === "pipeline" ? active(rows).length : v === "expansion" ? ws.expList.length : v === "onboarding" ? Object.keys(desk.onb).length : null);
-  const body = { overview: <OverviewView />, today: <TodayView />, pipeline: <PipelineView />, map: <MapView />, expansion: <ExpansionView />, onboarding: <OnboardingView />, settings: <SettingsView /> }[view];
+  const badge = (v: View) => (v === "overview" ? active(rows).filter((r) => r.ui === "adv" || r.ui === "redir").length + desk.replies.length : v === "pipeline" ? active(rows).length : v === "places" ? ws.expList.length : v === "onboarding" ? Object.keys(desk.onb).length : null);
+  const body = { overview: <OverviewView />, pipeline: <PipelineView />, onboarding: <OnboardingView />, places: <PlacesView />, settings: <SettingsView /> }[view];
 
   return (
     <UiCtx.Provider value={ui}>
@@ -199,7 +199,7 @@ export default function App() {
               <h1>{t[0]}</h1>
             </div>
             <span className="sp" />
-            <button className="pill" title="How people competing for the same slot are ranked" onClick={() => go("settings", { settings: "phase" })}><Ic n="sliders" />Ranking: {result.config.phaseName}<Ic n="chev" /></button>
+            <RankingMenu />
             <button className="btn round" aria-label="Switch light and dark theme" onClick={theme.toggle}><Ic n={theme.dark ? "sun" : "moon"} /></button>
             <button className="btn" title="Decisions, territories, onboarding, expansion list and history as one Excel file" onClick={() => { exportWorkbook(result, input, ws.state.audit, ws.state.fileName, rows, desk, ws.expList); showToast("Excel downloaded: decisions, territories, onboarding, expansion list, history"); }}>
               <Ic n="down" />
@@ -214,10 +214,9 @@ export default function App() {
         </div>
 
         <nav className="tabbar" aria-label="Main">
-          {([["overview", "bar", "Overview"], ["today", "today", "Today"], ["pipeline", "list", "Pipeline"], ["onboarding", "clip", "Onboarding"]] as [View, string, string][]).map(([v, ic, l]) => (
-            <button key={v} className={view === v ? "on" : ""} onClick={() => go(v)}><Ic n={ic} />{l}</button>
+          {NAV.map(([v, ic, l]) => (
+            <button key={v} className={view === v ? "on" : ""} onClick={() => go(v)}><Ic n={ic} />{v === "settings" ? "Rules" : l}</button>
           ))}
-          <button className={["map", "expansion", "settings"].includes(view) ? "on" : ""} onClick={() => setModal({ kind: "more" })}><Ic n="more" />More</button>
         </nav>
 
         {!chatOpen && <button className="fab" onClick={() => setChatOpen(true)}><Ic n="spark" />Ask</button>}

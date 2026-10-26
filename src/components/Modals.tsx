@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Ic } from "./Icon";
 import { Chip, Ring, useUi, type ModalState, type ReviewBucket } from "./kit";
 import { ctxFromExp, ctxFromRow, defaultMailType, mailFor, toText } from "@/lib/desk/mail";
@@ -35,7 +35,6 @@ export function ModalHost({ modal, onClose }: { modal: ModalState; onClose: () =
     case "store": return <StoreModal pin={modal.pin} onClose={onClose} />;
     case "stores": return <StoresModal onClose={onClose} />;
     case "summary": return <SummaryModal onClose={onClose} />;
-    case "more": return <MoreSheet onClose={onClose} />;
   }
 }
 
@@ -245,7 +244,7 @@ function MoveModal({ ids, spot, target: t0, onClose }: { ids: string[]; spot?: b
   );
 }
 
-/* ---------- free pin, stores, summary, more ---------- */
+/* ---------- free pin, stores, summary ---------- */
 function PinModal({ pin, terr, onClose }: { pin: string; terr: string; onClose: () => void }) {
   const ui = useUi();
   const { ws } = ui;
@@ -307,16 +306,6 @@ function SummaryModal({ onClose }: { onClose: () => void }) {
         <label className="row" style={{ gap: 6 }}><span style={{ fontWeight: 600 }}>When</span><select className="sel" value={when} onChange={(e) => setWhen(e.target.value)}><option>Send now</option><option>Every Monday, 9:00</option></select></label>
       </div>
       <div className="mail"><div className="sub">Pin Drop weekly summary</div><ul>{lines.map((l) => <li key={l}>{l}</li>)}</ul><p>Full numbers are on the Overview page.</p></div>
-    </Shell>
-  );
-}
-function MoreSheet({ onClose }: { onClose: () => void }) {
-  const ui = useUi();
-  return (
-    <Shell sheet title="More" onClose={onClose}>
-      {([["map", "map", "Map"], ["expansion", "globe", "Expansion list"], ["settings", "sliders", "Rules and settings"]] as const).map(([v, ic, l]) => (
-        <button key={v} className="nav" style={{ width: "100%" } as CSSProperties} onClick={() => { onClose(); ui.go(v); }}><Ic n={ic} />{l}</button>
-      ))}
     </Shell>
   );
 }

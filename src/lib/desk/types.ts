@@ -8,9 +8,17 @@ export const UI_META: Record<UiStatus, { label: string; icon: string; hint: stri
   info: { label: "Needs info", icon: "help", hint: "A fixable question must be answered first" },
   no: { label: "Not now", icon: "pause", hint: "Does not fit this round" },
   wait: { label: "Waitlist", icon: "hourglass", hint: "Qualified, but every slot is taken" },
-  redir: { label: "New-pin offer", icon: "repeat", hint: "Strong partner, offered a different free pin" },
-  exp: { label: "Expansion list", icon: "globe", hint: "Kept for when we serve their area" },
+  redir: { label: "Proceed · new pin", icon: "repeat", hint: "Strong partner, offered a different free pin" },
+  exp: { label: "Not now · kept", icon: "globe", hint: "Kept for when we serve their area" },
 };
+
+// Four groups are shown to the owner. A new-pin offer is a kind of Proceed. A kept pin is a kind of Not now.
+export const UI_GROUPS: { key: UiStatus; label: string; members: UiStatus[] }[] = [
+  { key: "adv", label: "Proceed", members: ["adv", "redir"] },
+  { key: "info", label: "Needs info", members: ["info"] },
+  { key: "wait", label: "Waitlist", members: ["wait"] },
+  { key: "no", label: "Not now", members: ["no", "exp"] },
+];
 
 export type MailType = "next" | "offer" | "info" | "pin" | "dup" | "line" | "notnow" | "keep" | "exp2" | "remind";
 export const MAIL_LABEL: Record<MailType, string> = {

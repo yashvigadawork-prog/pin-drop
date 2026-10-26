@@ -93,6 +93,16 @@ svg.i { width: 1em; height: 1em; flex: none; stroke: currentColor; fill: none; s
 .content { flex: 1; overflow: auto; padding: 4px 24px 96px; scroll-behavior: smooth; }
 .pill { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-weight: 600; font-size: 12.5px; }
 .pill:hover { border-color: color-mix(in srgb, var(--ink) 30%, var(--line)); }
+.onbgrid { grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); align-items: start; }
+.onbgrid > *, .onbgrid .card { min-width: 0; }
+.pill { white-space: nowrap; }
+.pill-n { overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
+.pill.on { border-color: var(--accent); }
+.rankbox { position: relative; }
+.rankmenu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: min(420px, 92vw); max-height: min(80vh, 640px); overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 24px 60px -20px rgba(0,0,0,.55); animation: menuin .16s ease-out; }
+.rankmenu .phase { padding: 10px 12px; gap: 6px; }
+.rankprev { padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface2); display: flex; flex-direction: column; gap: 4px; }
+@keyframes menuin { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface2); border: 1px solid var(--line); border-radius: 999px; }
 .seg button { padding: 5px 12px; border-radius: 999px; font-weight: 600; font-size: 12.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
 .seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
@@ -314,6 +324,13 @@ td.ck, th.ck { width: 30px; }
 input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
 .protobar { white-space: nowrap; }
 @media (max-width: 760px) {
+  .onbgrid { grid-template-columns: minmax(0, 1fr); }
+  .top .crumb { display: none; }
+  .top { gap: 6px; }
+  .pill-l { display: none; }
+  .pill-n { max-width: 96px; }
+  .rankbox { position: static; }
+  .rankmenu { position: fixed; left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 82vh; }
   .tbl thead { display: none; }
   .tbl, .tbl tbody, .tbl tr, .tbl td { display: block; width: 100%; }
   .tbl tr { padding: 12px 14px; border-top: 1px solid var(--line); position: relative; }

@@ -3,18 +3,74 @@
 import type { CSSProperties } from "react";
 import { Ic } from "./Icon";
 import { BucketIcon, Card, CountUp, Delta, Meter, useUi } from "./kit";
-import { countBy } from "@/lib/desk/model";
+import { NowView } from "./TodayView";
+import { active, countBy, type Row } from "@/lib/desk/model";
+import { UI_GROUPS, UI_ORDER, type UiStatus } from "@/lib/desk/types";
 import { SAMPLE_TREND, REASON_META, funnel, reasonCounts, stageTimes, type ReasonKey } from "@/lib/desk/metrics";
 import { daysSince } from "@/lib/desk/time";
 
+export function Donut({ rows, onPick }: { rows: Row[]; onPick: (s: UiStatus) => void }) {
+  const n = countBy(rows);
+  const tot = rows.length;
+  const R = 54;
+  const C = 2 * Math.PI * R;
+  const starts = UI_ORDER.reduce<number[]>((acc, st, i) => [...acc, (acc[i - 1] ?? 0) + (i ? (C * n[UI_ORDER[i - 1]]) / Math.max(1, tot) : 0)], []);
+  return (
+    <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+      <span className="pdring" style={{ width: 140, height: 140 }}>
+        <svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="Where everyone stands">
+          <circle className="track" cx="70" cy="70" r={R} strokeWidth="16" />
+          {UI_ORDER.map((s, i) => {
+            if (!n[s]) return null;
+            const part = (C * n[s]) / Math.max(1, tot);
+            const len = Math.max(part - 3, 1);
+            return <circle key={s} className="arc" data-s={s} cx="70" cy="70" r={R} fill="none" stroke="var(--c)" strokeWidth="16" style={{ "--cc": C, "--i": i, strokeDasharray: `${len} ${C - len}`, strokeDashoffset: -starts[i] } as CSSProperties} />;
+          })}
+        </svg>
+        <span className="v" style={{ textAlign: "center", lineHeight: 1.1 }}>
+          <CountUp to={tot} style={{ fontSize: 32 }} />
+          <br />
+          <span className="muted" style={{ fontSize: 11, fontWeight: 500, fontFamily: "var(--f-body)" }}>applications</span>
+        </span>
+      </span>
+      <div className="stack" style={{ gap: 3, flex: 1, minWidth: 130 }}>
+        {UI_GROUPS.map((g) => {
+          const total = g.members.reduce((a, m) => a + n[m], 0);
+          const sub = g.members.slice(1).filter((m) => n[m]).map((m) => `${n[m]} ${m === "redir" ? "new pin" : "kept"}`).join(", ");
+          return (
+            <button key={g.key} className="row legrow" data-s={g.key} onClick={() => onPick(g.key)} title="Show these in the pipeline">
+              <span className="dot" />
+              <span style={{ flex: 1, textAlign: "left" }}>{g.label}{sub && <span className="muted" style={{ fontSize: 11.5 }}> · {sub}</span>}</span>
+              <b className="mono">{total}</b>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function OverviewView() {
+  const ui = useUi();
+  const { nav, setNav, ws } = ui;
+  const waiting = active(ws.rows).filter((r) => r.ui === "adv" || r.ui === "redir").length + ws.desk.replies.length;
+  return (
+    <div className="stack">
+      <div className="seg" style={{ alignSelf: "flex-start" }}>
+        <button className={nav.ovTab === "now" ? "on" : ""} onClick={() => setNav({ ovTab: "now" })}><Ic n="today" />Needs you now{waiting > 0 && <span className="n" style={{ marginLeft: 2 }}>{waiting}</span>}</button>
+        <button className={nav.ovTab === "perf" ? "on" : ""} onClick={() => setNav({ ovTab: "perf" })}><Ic n="bar" />Performance</button>
+      </div>
+      {nav.ovTab === "now" ? <NowView /> : <PerfView />}
+    </div>
+  );
+}
+
+function PerfView() {
   const ui = useUi();
   const { ws, now, nav, setNav } = ui;
   const { rows, desk, result } = ws;
   if (!result) return null;
-  const c = countBy(rows);
   const all = rows.length;
-  const acc = c.adv + c.redir;
   const times = stageTimes(desk, now);
   const known = times.filter((t) => t.avg !== null);
   const worst = known.filter((t) => t.avg! > t.target).sort((a, b) => b.avg! - b.target - (a.avg! - a.target))[0];
@@ -31,11 +87,13 @@ export function OverviewView() {
   const th = 84;
   const pts = trend ? trend.map((v, i) => [10 + (i * (tw - 40)) / 3, 10 + ((v - 24) / 16) * (th - 30)]) : [];
 
-  const K: { icon: string; s: "redir" | "adv" | "wait" | "exp"; n: number; label: string; sub: React.ReactNode; go: () => void }[] = [
-    { icon: "users", s: "redir", n: all, label: "Applications in", sub: desk.sample ? <Delta v={all} prev={23} /> : <span className="dl">this file</span>, go: () => ui.go("pipeline", { filter: "all", showMoved: true }) },
-    { icon: "check", s: "adv", n: acc, label: "Accepted", sub: <span className="dl">{Math.round((acc / Math.max(1, all)) * 100)}% of all</span>, go: () => ui.go("pipeline", { filter: "adv", showMoved: true }) },
-    { icon: "clock", s: "wait", n: c.info + c.wait, label: "Pending", sub: <span className="dl">{c.info} need info · {c.wait} waitlist</span>, go: () => ui.go("pipeline", { filter: "info" }) },
-    { icon: "globe", s: "exp", n: c.no + c.exp, label: "Not accepted, kept", sub: <span className="dl">{c.exp} on Expansion list</span>, go: () => ui.go("expansion") },
+  const slotsAll = result.territories.reduce((a, t) => a + t.territory.slots, 0);
+  const slotsFilled = rows.filter((r) => r.slotTerr && (r.ui === "adv" || r.ui === "redir")).length;
+  const waitingYes = active(rows).filter((r) => r.ui === "adv" || r.ui === "redir").length;
+  const K: { icon: string; s: "adv" | "redir" | "wait"; n: number; of?: number; label: string; sub: React.ReactNode; go: () => void }[] = [
+    { icon: "layers", s: "adv", n: slotsFilled, of: slotsAll, label: "Slots filled", sub: <span className="dl">{slotsAll - slotsFilled} still open</span>, go: () => ui.go("places", { placesTab: "terr" }) },
+    { icon: "trend", s: "redir", n: trend ? trend[3] : 0, label: "Days to signed agreement", sub: trend ? <span className="dl">{trend[2] - trend[3]} days faster than last week</span> : <span className="dl">Appears after a week of use</span>, go: () => setNav({ period: "week" }) },
+    { icon: "check", s: "wait", n: waitingYes, label: "Decisions waiting", sub: <span className="dl">Waiting for your yes</span>, go: () => setNav({ ovTab: "now" }) },
   ];
 
   return (
@@ -88,7 +146,7 @@ export function OverviewView() {
         </div>
       )}
 
-      <div className="grid g4">
+      <div className="grid g3">
         {K.map((k, i) => (
           <button key={k.label} className="card hov rise bucket" data-s={k.s} style={{ "--i": i + 2, textAlign: "left" } as CSSProperties} onClick={k.go}>
             <div className="row">
@@ -96,7 +154,10 @@ export function OverviewView() {
               <span className="sp" />
               <span className="eyebrow">{k.label}</span>
             </div>
-            <CountUp className="num" to={k.n} />
+            <div className="row" style={{ alignItems: "baseline", gap: 6 }}>
+              {k.label.startsWith("Days") && !trend ? <span className="num">n/a</span> : <CountUp className="num" to={k.n} />}
+              {k.of !== undefined && <span className="muted" style={{ fontSize: 18, fontWeight: 600 }}>/ {k.of}</span>}
+            </div>
             {k.sub}
           </button>
         ))}
@@ -167,6 +228,10 @@ export function OverviewView() {
 
       <div className="grid g3">
         <Card i={5}>
+          <h3><Ic n="layers" />Where everyone stands</h3>
+          <Donut rows={rows} onPick={(s) => ui.go("pipeline", { filter: s, showMoved: true })} />
+        </Card>
+        <Card i={6}>
           <h3><Ic n="trend" />Application to signed agreement</h3>
           {trend ? (
             <>
@@ -187,7 +252,7 @@ export function OverviewView() {
           )}
         </Card>
 
-        <Card i={6}>
+        <Card i={7}>
           <h3><Ic n="help" />Why people are not proceeding</h3>
           <div className="stack" style={{ gap: 10 }}>
             {(Object.keys(REASON_META) as ReasonKey[]).map((k, i) => (
@@ -201,27 +266,6 @@ export function OverviewView() {
           </div>
         </Card>
 
-        <Card i={7}>
-          <h3><Ic n="layers" />Territory slots filled</h3>
-          <div className="stack" style={{ gap: 8 }}>
-            {result.territories.map((t, i) => {
-              const al = rows.filter((r) => r.slotTerr === t.territory.id && (r.ui === "adv" || r.ui === "redir")).length;
-              const slots = t.territory.slots;
-              return (
-                <div key={t.territory.id} className="row" style={{ gap: 8 }}>
-                  <span className="mono" style={{ width: 62, fontSize: 12 }}>{t.territory.id}</span>
-                  <span style={{ width: 96, fontSize: 12.5 }}>{t.territory.city}</span>
-                  <span className="row" style={{ gap: 3, flex: 1 }}>
-                    {Array.from({ length: Math.max(slots, 1) }).map((_, k) => (
-                      <span key={k} className="pop" style={{ "--i": i + k, width: 18, height: 8, borderRadius: 99, background: k < al ? "var(--s-adv)" : "var(--line)" } as CSSProperties} />
-                    ))}
-                  </span>
-                  <b className="mono" style={{ fontSize: 12 }}>{al}/{slots}</b>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
       </div>
 
       <Card i={8}>

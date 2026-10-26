@@ -13,10 +13,7 @@ import type { Row } from "@/lib/desk/model";
 
 const TABS: [DrawerTab, string, string][] = [
   ["why", "target", "Why"],
-  ["score", "trend", "Score"],
   ["plan", "clock", "Plan"],
-  ["checks", "shield", "Checks"],
-  ["emails", "mail", "Emails"],
   ["facts", "file", "Facts"],
 ];
 
@@ -66,21 +63,25 @@ export function Drawer({ id, tab, setTab, paste, onClose }: { id: string; tab: D
         </div>
       </div>
       <div className="dbody">
-        {tab === "why" && <WhyTab r={r} />}
-        {tab === "score" && <ScoreTab r={r} />}
-        {tab === "plan" && <PlanTab r={r} isP={isP} />}
-        {tab === "checks" && (
-          isP || onb ? (
-            <div className="card" style={box}>
-              <h3><Ic n="shield" />Checks before the agreement{!onb && <><span className="sp" /><span className="tag">Starts after the next-steps email</span></>}</h3>
-              <Checklist o={onb ?? (desk.extras[id] ? { stage: 0, since: "", holdUntil: "", chk: desk.extras[id] } : undefined)} mods={desk.mods} id={id} />
-              {onb && <button className="btn" style={{ marginTop: 10 }} onClick={() => ui.go("onboarding", { onb: id })}><Ic n="clip" />Open in Onboarding</button>}
-            </div>
-          ) : (
-            <div className="card muted" style={{ ...box, textAlign: "center", padding: 30 }}><Ic n="shield" /><p style={{ marginTop: 8 }}>Checks start once the applicant moves forward.</p></div>
-          )
+        {tab === "why" && (
+          <>
+            <WhyTab r={r} />
+            <ScoreTab r={r} />
+          </>
         )}
-        {tab === "emails" && <EmailsTab r={r} now={now} />}
+        {tab === "plan" && (
+          <>
+            <PlanTab r={r} isP={isP} />
+            {isP || onb ? (
+              <div className="card" style={box}>
+                <h3><Ic n="shield" />Checks before the agreement{!onb && <><span className="sp" /><span className="tag">Starts after the next-steps email</span></>}</h3>
+                <Checklist o={onb ?? (desk.extras[id] ? { stage: 0, since: "", holdUntil: "", chk: desk.extras[id] } : undefined)} mods={desk.mods} id={id} />
+                {onb && <button className="btn" style={{ marginTop: 10 }} onClick={() => ui.go("onboarding", { onb: id })}><Ic n="clip" />Open in Onboarding</button>}
+              </div>
+            ) : null}
+            <EmailsTab r={r} now={now} />
+          </>
+        )}
         {tab === "facts" && <FactsTab key={id + (paste ?? "")} r={r} initial={paste ?? ""} />}
       </div>
       <div className="dfoot">

@@ -1,25 +1,20 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { Ic } from "./Icon";
-import { BucketIcon, Card, ChangeList, useUi } from "./kit";
-import { DEFAULT_CONFIG, PHASE_PRESETS } from "@/lib/engine/config";
-import { diffResults, runEngine } from "@/lib/engine/engine";
+import { Card, useUi } from "./kit";
+import { DEFAULT_CONFIG } from "@/lib/engine/config";
 import { EVIDENCE, RULES, evidenceById } from "@/lib/engine/rulebook";
-import type { EngineConfig, Tier, Weights } from "@/lib/engine/types";
+import type { EngineConfig, Tier } from "@/lib/engine/types";
 import { MAP_CITIES, MODS, PIN_PREFIX } from "@/lib/desk/types";
 import { ago } from "@/lib/desk/time";
 
 const TABS: [string, string, string][] = [
-  ["phase", "sliders", "Ranking"],
-  ["areas", "pin", "Serviceable areas"],
-  ["checks", "shield", "Checks"],
+  ["areas", "pin", "Areas"],
+  ["checks", "shield", "Checks and safeguards"],
   ["email", "mail", "Email"],
-  ["guard", "usercheck", "Safeguards"],
-  ["rules", "book", "Rulebook"],
-  ["history", "history", "History"],
+  ["rules", "book", "Rulebook and history"],
 ];
-const W: [keyof Weights, string][] = [["partner", "Partner"], ["premises", "Premises"], ["place", "Place"], ["pace", "Pace"]];
 
 function Switch({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
   return <button className={`sw${on ? " on" : ""}`} onClick={onClick} aria-label={label} role="switch" aria-checked={on} />;
@@ -37,95 +32,30 @@ function SetRow({ icon, title, sub, children }: { icon: string; title: string; s
 export function SettingsView() {
   const ui = useUi();
   const { nav, setNav } = ui;
+  // Older links used other names. Ranking now lives in the top bar.
+  const tab = nav.setting === "guard" ? "checks" : nav.setting === "history" ? "rules" : TABS.some((t) => t[0] === nav.setting) ? nav.setting : "areas";
   return (
     <div className="stack">
       <div className="seg" style={{ alignSelf: "flex-start", flexWrap: "wrap" }}>
         {TABS.map(([k, ic, l]) => (
-          <button key={k} className={nav.setting === k ? "on" : ""} onClick={() => setNav({ setting: k })}><Ic n={ic} />{l}</button>
+          <button key={k} className={tab === k ? "on" : ""} onClick={() => setNav({ setting: k })}><Ic n={ic} />{l}</button>
         ))}
       </div>
-      {nav.setting === "phase" && <RankingTab />}
-      {nav.setting === "areas" && <AreasTab />}
-      {nav.setting === "checks" && <ChecksTab />}
-      {nav.setting === "email" && <EmailTab />}
-      {nav.setting === "guard" && <GuardTab />}
-      {nav.setting === "rules" && <RulebookTab />}
-      {nav.setting === "history" && <HistoryTab />}
-    </div>
-  );
-}
-
-function RankingTab() {
-  const ui = useUi();
-  const { ws } = ui;
-  const { result, input, state } = ws;
-  const [pick, setPick] = useState<string | null>(null);
-  const [unlock, setUnlock] = useState(false);
-  const [custom, setCustom] = useState<Weights | null>(null);
-  const cfg = result?.config;
-  const candidate: Weights | null = custom ?? (pick ? PHASE_PRESETS.find((p) => p.name === pick)?.weights ?? null : null);
-  const preview = useMemo(() => {
-    if (!input || !result || !candidate || !cfg) return null;
-    const next = runEngine(input, { ...cfg, weights: candidate }, { owner: state.owner });
-    return diffResults(result, next).filter((c) => c.from !== c.to || c.fromAlloc !== c.toAlloc);
-  }, [input, result, cfg, candidate, state.owner]);
-  if (!cfg || !result) return null;
-  const apply = (w: Weights, name: string) => {
-    ws.setConfig({ ...cfg, weights: w, phaseName: name }, `Ranking set to ${name}`, "weights");
-    setPick(null);
-    setCustom(null);
-    ui.toast(`Ranking: ${name}`);
-  };
-  const live = custom ?? cfg.weights;
-  return (
-    <>
-      <p className="muted" style={{ margin: 0 }}>Ranking only decides who wins when several people want the same slot. The hard rules never change.</p>
-      <div className="grid g4">
-        {PHASE_PRESETS.map((p, i) => {
-          const w = [p.weights.partner, p.weights.premises, p.weights.place, p.weights.pace];
-          const on = (pick ?? cfg.phaseName) === p.name;
-          return (
-            <button key={p.name} className={`phase rise${on ? " on" : ""}`} style={{ "--i": i } as CSSProperties} onClick={() => { setPick(p.name); setCustom(null); }}>
-              <div className="row"><b>{p.name}</b><span className="sp" />{cfg.phaseName === p.name && <span className="tag">Active</span>}</div>
-              <div className="wbar">{w.map((x, k) => <i key={k} className="grow-x" style={{ "--i": k, width: `${x}%`, background: `color-mix(in srgb,var(--ink) ${100 - k * 22}%,transparent)` } as CSSProperties} />)}</div>
-              <div className="row wrap" style={{ gap: 4 }}>{W.map(([key, label]) => <span key={key} className="tag mono">{label[0]} {p.weights[key]}</span>)}</div>
-              <div className="muted" style={{ fontSize: 12.5 }}>{p.when}</div>
-            </button>
-          );
-        })}
-      </div>
-      {candidate && preview && (pick !== cfg.phaseName || custom) && (
-        <Card data-s="wait" style={{ gap: 10 } as CSSProperties}>
-          <div className="row wrap" style={{ gap: 12 }}>
-            <BucketIcon icon="eye" />
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <b>If you switch to {custom ? "these weights" : pick}</b>
-              <div className="muted">{preview.length ? `${preview.length} recommendation${preview.length === 1 ? "" : "s"} would change.` : "Nobody moves. The same people get the same slots."}</div>
-            </div>
-            <button className="btn" onClick={() => { setPick(null); setCustom(null); }}>Cancel</button>
-            <button className="btn primary" onClick={() => apply(candidate, custom ? "Custom" : pick!)}>Apply and re-rank</button>
-          </div>
-          {preview.length > 0 && <ChangeList changes={preview} onOpen={(id) => ui.open(id)} max={8} />}
-        </Card>
+      {tab === "areas" && <AreasTab />}
+      {tab === "checks" && (
+        <>
+          <ChecksTab />
+          <GuardTab />
+        </>
       )}
-      <Card>
-        <SetRow icon="lock" title="Custom weights" sub="Locked so nobody changes them by accident while working.">
-          <Switch on={unlock} onClick={() => setUnlock(!unlock)} label="Unlock weights" />
-        </SetRow>
-        {unlock && (
-          <div className="stack" style={{ gap: 10, paddingTop: 6 }}>
-            {W.map(([key, label]) => (
-              <label key={key} className="row">
-                <span style={{ width: 90, fontWeight: 600 }}>{label}</span>
-                <input type="range" min={5} max={70} value={live[key]} style={{ flex: 1 }} onChange={(e) => setCustom({ ...live, [key]: Number(e.target.value) })} />
-                <b className="mono" style={{ width: 34 }}>{live[key]}</b>
-              </label>
-            ))}
-            <span className="muted" style={{ fontSize: 12.5 }}>Weights are relative. Move a slider to see who would change before you apply.</span>
-          </div>
-        )}
-      </Card>
-    </>
+      {tab === "email" && <EmailTab />}
+      {tab === "rules" && (
+        <>
+          <RulebookTab />
+          <HistoryTab />
+        </>
+      )}
+    </div>
   );
 }
 

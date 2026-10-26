@@ -25,7 +25,7 @@ export function OnboardingView() {
   const mentor = d.plan?.training.mentorStore;
 
   return (
-    <div className="grid" style={{ gridTemplateColumns: "minmax(220px,300px) minmax(0,1fr)", alignItems: "start" }} id="onbgrid">
+    <div className="grid onbgrid">
       <div className="stack" style={{ gap: 10 }}>
         {ids.map((pid, i) => {
           const r = rows.find((x) => x.id === pid)!;

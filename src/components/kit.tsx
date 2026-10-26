@@ -6,15 +6,17 @@ import type { Workspace } from "./useWorkspace";
 import { UI_META, type UiStatus } from "@/lib/desk/types";
 import { statusWord } from "@/lib/engine/engine";
 
-export type View = "overview" | "today" | "pipeline" | "map" | "expansion" | "onboarding" | "settings";
+export type View = "overview" | "pipeline" | "onboarding" | "places" | "settings";
+// Older names still work as targets: Today is the first Overview tab. Map and Expansion are parts of Places.
+export type GoTarget = View | "today" | "map" | "expansion";
 export type ReviewBucket = "proceed" | "info" | "wait" | "later" | "fresh" | "exp2";
-export type DrawerTab = "why" | "score" | "plan" | "checks" | "emails" | "facts";
+export type DrawerTab = "why" | "plan" | "facts";
 
 export interface Ui {
   ws: Workspace;
   now: number;
   view: View;
-  go: (v: View, opts?: { onb?: string; settings?: string; filter?: string; terr?: string | null; showMoved?: boolean; mode?: "list" | "terr"; expF?: string | null; expCity?: string }) => void;
+  go: (v: GoTarget, opts?: { onb?: string; settings?: string; filter?: string; terr?: string | null; showMoved?: boolean; placesTab?: "terr" | "exp"; expF?: string | null; expCity?: string }) => void;
   open: (id: string, tab?: DrawerTab, paste?: string) => void;
   mail: (id: string) => void;
   move: (ids: string[], o?: { spot?: boolean; target?: UiStatus }) => void;
@@ -29,7 +31,6 @@ export interface NavState {
   filter: UiStatus | "all";
   q: string;
   sort: "fit" | "status" | "sheet";
-  mode: "list" | "terr";
   showMoved: boolean;
   terrF: string | null;
   pick: Record<string, boolean>;
@@ -40,6 +41,8 @@ export interface NavState {
   city: string | null;
   layers: { app: boolean; store: boolean; exp: boolean };
   period: "week" | "month";
+  ovTab: "now" | "perf";
+  placesTab: "terr" | "exp";
 }
 export type ModalState =
   | { kind: "mail"; id: string; type?: import("@/lib/desk/types").MailType }
@@ -48,8 +51,7 @@ export type ModalState =
   | { kind: "pin"; pin: string; terr: string }
   | { kind: "store"; pin: string }
   | { kind: "stores" }
-  | { kind: "summary" }
-  | { kind: "more" };
+  | { kind: "summary" };
 
 export const UiCtx = createContext<Ui | null>(null);
 export function useUi(): Ui {

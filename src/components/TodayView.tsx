@@ -1,61 +1,10 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import { Ic } from "./Icon";
-import { BucketIcon, Card, Chip, CountUp, Ring, useUi, type ReviewBucket } from "./kit";
-import { active, countBy, spotIds, type Row } from "@/lib/desk/model";
-import { UI_META, UI_ORDER, type UiStatus } from "@/lib/desk/types";
+import { Card, Chip, Ring, useUi, type ReviewBucket } from "./kit";
+import { active, spotIds, type Row } from "@/lib/desk/model";
 import { ago } from "@/lib/desk/time";
-
-export function Donut({ rows, onPick }: { rows: Row[]; onPick: (s: UiStatus) => void }) {
-  const n = countBy(rows);
-  const tot = rows.length;
-  const R = 54;
-  const C = 2 * Math.PI * R;
-  const starts = UI_ORDER.reduce<number[]>((acc, st, i) => [...acc, (acc[i - 1] ?? 0) + (i ? (C * n[UI_ORDER[i - 1]]) / Math.max(1, tot) : 0)], []);
-  return (
-    <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-      <span className="pdring" style={{ width: 140, height: 140 }}>
-        <svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="Where everyone stands">
-          <circle className="track" cx="70" cy="70" r={R} strokeWidth="16" />
-          {UI_ORDER.map((s, i) => {
-            if (!n[s]) return null;
-            const part = (C * n[s]) / Math.max(1, tot);
-            const len = Math.max(part - 3, 1);
-            return <circle key={s} className="arc" data-s={s} cx="70" cy="70" r={R} fill="none" stroke="var(--c)" strokeWidth="16" style={{ "--cc": C, "--i": i, strokeDasharray: `${len} ${C - len}`, strokeDashoffset: -starts[i] } as CSSProperties} />;
-          })}
-        </svg>
-        <span className="v" style={{ textAlign: "center", lineHeight: 1.1 }}>
-          <CountUp to={tot} style={{ fontSize: 32 }} />
-          <br />
-          <span className="muted" style={{ fontSize: 11, fontWeight: 500, fontFamily: "var(--f-body)" }}>applications</span>
-        </span>
-      </span>
-      <div className="stack" style={{ gap: 3, flex: 1, minWidth: 130 }}>
-        {UI_ORDER.map((s) => (
-          <button key={s} className="row legrow" data-s={s} onClick={() => onPick(s)} title="Show these in the pipeline">
-            <span className="dot" />
-            <span style={{ flex: 1, textAlign: "left" }}>{UI_META[s].label}</span>
-            <b className="mono">{n[s]}</b>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PinRow({ icon, s, title, text, children }: { icon: string; s: UiStatus; title: string; text: string; children: ReactNode }) {
-  return (
-    <div className="row wrap" data-s={s} style={{ gap: 12, alignItems: "flex-start" }}>
-      <BucketIcon icon={icon} size={34} />
-      <div style={{ flex: 1, minWidth: 150 }}>
-        <b>{title}</b>
-        <div className="muted" style={{ fontSize: 12.5 }}>{text}</div>
-        <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>{children}</div>
-      </div>
-    </div>
-  );
-}
 
 export function ProceedRow({ r, i }: { r: Row; i: number }) {
   const ui = useUi();
@@ -82,7 +31,8 @@ export function ProceedRow({ r, i }: { r: Row; i: number }) {
   );
 }
 
-export function TodayView() {
+// "Needs you now": only things a person must act on. Numbers and trends live in Performance.
+export function NowView() {
   const ui = useUi();
   const { ws, now } = ui;
   const { rows, desk } = ws;
@@ -93,63 +43,47 @@ export function TodayView() {
   const wait = act.filter((r) => r.ui === "wait");
   const waitNew = wait.filter((r) => !desk.mail[r.id]);
   const later = [...act.filter((r) => r.ui === "no" && !desk.mail[r.id]), ...rows.filter((r) => r.ui === "exp" && !desk.onb[r.id] && !desk.mail["exp:" + r.id])];
-  const inOnb = Object.keys(desk.onb).length;
   const spot = spotIds(rows, desk.guard.spot);
   const replied = new Set(desk.replies.map((r) => r.id));
   const asked = info.filter((r) => desk.mail[r.id] && !replied.has(r.id));
   const typos = info.filter((r) => r.tag === "pin");
-  const outside = rows.filter((r) => r.ui === "exp" && !r.withdrawn);
 
-  const B: { s: UiStatus; icon: string; n: number; title: string; sub: string; b: ReviewBucket }[] = [
-    { s: "adv", icon: "check", n: prop.length, title: "Waiting for your yes", sub: `${prop.length} ready to email${inOnb ? `. ${inOnb} already in Onboarding` : ""}`, b: "proceed" },
-    { s: "info", icon: "help", n: infoNew.length, title: "Need info", sub: `${infoNew.length} not asked yet · ${info.length - infoNew.length} asked, waiting`, b: "info" },
-    { s: "wait", icon: "hourglass", n: waitNew.length, title: "Waitlist", sub: `${waitNew.length} not told yet · ${wait.length - waitNew.length} told`, b: "wait" },
-    { s: "exp", icon: "globe", n: later.length, title: "Not now, kept", sub: "Reasons plus a way back in", b: "later" },
+  const E: { b: ReviewBucket; icon: string; s: string; title: string; sub: string; n: number }[] = [
+    { b: "info", icon: "help", s: "info", title: "Needs info", sub: `${infoNew.length} not asked yet${typos.length ? ` · ${typos.length} pin typo${typos.length === 1 ? "" : "s"}` : ""}`, n: infoNew.length },
+    { b: "wait", icon: "hourglass", s: "wait", title: "Waitlist", sub: `${waitNew.length} not told yet`, n: waitNew.length },
+    { b: "later", icon: "pause", s: "no", title: "Not now", sub: "Reason, plus a way back in", n: later.length },
   ];
 
   return (
     <div className="stack">
-      <div className="row wrap rise" style={{ gap: 8 }}>
-        <span className="tag"><Ic n="check" />{prop.length} waiting for your yes</span>
-        <span className="tag"><Ic n="inbox" />{desk.replies.length} replies to read</span>
-        <span className="tag"><Ic n="clock" />{asked.length} slow to reply</span>
-      </div>
-      <div className="grid g4">
-        <Card i={0}>
-          <h3><Ic n="layers" />Where everyone stands</h3>
-          <Donut rows={rows} onPick={(s) => ui.go("pipeline", { filter: s, showMoved: true })} />
-        </Card>
-        {B.map((b, i) => (
-          <div key={b.b} className="card bucket rise" data-s={b.s} style={{ "--i": i + 1 } as CSSProperties}>
-            <div className="row">
-              <span className="ic"><Ic n={b.icon} /></span>
-              <span className="sp" />
-              <span className="eyebrow">{b.title}</span>
-            </div>
-            <CountUp className="num" to={b.n} />
-            <p>{b.sub}</p>
-            {b.n ? (
-              <button className="btn sm primary" onClick={() => ui.review(b.b)}><Ic n="eye" />Review {b.n}</button>
-            ) : (
-              <button className="btn sm done"><Ic n="check" />All done</button>
-            )}
-          </div>
-        ))}
-      </div>
-
       <div className="grid g2">
-        <Card i={2}>
+        <Card i={0}>
           <h3>
             <Ic n="star" />Waiting for your yes · {prop.length}
             <span className="sp" />
-            <span className="muted" style={{ fontWeight: 500, fontSize: 12 }}>Best fit first. Click a row for the full reasoning.</span>
+            {prop.length > 0 && <button className="btn sm primary" onClick={() => ui.review("proceed")}><Ic n="eye" />Review all {prop.length}</button>}
           </h3>
           <div className="stack" style={{ gap: 2 }}>
             {prop.length ? prop.map((r, i) => <ProceedRow key={r.id} r={r} i={i} />) : <div className="muted" style={{ padding: 20, textAlign: "center" }}>Nobody is waiting. Everyone you approved is in Onboarding.</div>}
           </div>
         </Card>
         <div className="stack">
-          <Card i={3}>
+          <Card i={1}>
+            <h3><Ic n="mail" />Emails ready to send</h3>
+            <div className="stack" style={{ gap: 6 }}>
+              {E.map((e) => (
+                <div key={e.b} className="row" data-s={e.s} style={{ gap: 10, padding: 8, borderRadius: "var(--r-sm)", background: "var(--surface2)" }}>
+                  <span className="bucket"><span className="ic" style={{ width: 32, height: 32, fontSize: 16 }}><Ic n={e.icon} /></span></span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <b>{e.title} · {e.n}</b>
+                    <div className="muted" style={{ fontSize: 12.5 }}>{e.sub}</div>
+                  </div>
+                  {e.n ? <button className="btn sm primary" onClick={() => ui.review(e.b)}><Ic n="eye" />Review {e.n}</button> : <span className="tag"><Ic n="check" />All done</span>}
+                </div>
+              ))}
+            </div>
+          </Card>
+          <Card i={2}>
             <h3><Ic n="inbox" />Replies to read · {desk.replies.length}</h3>
             <div className="stack" style={{ gap: 6 }}>
               {desk.replies.length ? (
@@ -172,73 +106,59 @@ export function TodayView() {
               )}
             </div>
           </Card>
-          <Card i={4}>
-            <h3>
-              <Ic n="shield" />Spot-check the engine · {spot.filter((id) => desk.spot[id]).length} of {spot.length}
-              <span className="sp" />
-              <span className="muted" style={{ fontWeight: 500, fontSize: 12 }}>{desk.guard.spot}% of decisions, checked by you</span>
-            </h3>
+          <Card i={3}>
+            <h3><Ic n="clock" />Slow to reply · {asked.length}</h3>
             <div className="stack" style={{ gap: 6 }}>
-              {spot.map((id) => {
-                const r = rows.find((x) => x.id === id)!;
-                const done = desk.spot[id];
-                return (
-                  <div key={id} className="row" style={{ gap: 10, padding: 8, borderRadius: "var(--r-sm)", background: "var(--surface2)" }}>
+              {asked.length ? (
+                asked.map((r) => (
+                  <div key={r.id} className="row" style={{ gap: 10, padding: 8, borderRadius: "var(--r-sm)", background: "var(--surface2)" }}>
+                    <Ring v={r.fit} size={34} sw={4} s="info" />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <b>{r.app.name}</b> <Chip s={r.ui} />
-                      <div className="muted" style={{ fontSize: 12.5 }}>{r.why}</div>
+                      <b>{r.app.name}</b>
+                      <div className="muted" style={{ fontSize: 12.5 }}>Asked {ago(desk.mail[r.id].at, now)}. {r.asks[0] ?? ""}</div>
                     </div>
-                    {done ? (
-                      <span className="tag"><Ic n="check" />{done === "agree" ? "Agreed" : "Moved"}</span>
-                    ) : (
-                      <>
-                        <button className="btn sm" onClick={() => ws.markSpot(id, "agree")}><Ic n="check" />Agree</button>
-                        <button className="btn sm" onClick={() => ui.move([id], { spot: true })}>Disagree</button>
-                      </>
-                    )}
+                    <button className="btn sm" onClick={() => ui.open(r.id)}>Open</button>
+                    <button className="btn sm primary" onClick={() => { ws.remind(r.id); ui.toast(`Reminder sent to ${r.app.name}`); }}><Ic n="bell" />Remind</button>
                   </div>
-                );
-              })}
-              {!spot.length && <div className="muted">Nothing to check yet.</div>}
+                ))
+              ) : (
+                <div className="muted">Everyone replied.</div>
+              )}
             </div>
           </Card>
         </div>
       </div>
 
-      <div className="grid g2">
-        <Card i={5}>
-          <h3><Ic n="pin" />Pin problems</h3>
-          <div className="stack" style={{ gap: 10 }}>
-            <PinRow icon="help" s="info" title={`${typos.length} pin${typos.length === 1 ? "" : "s"} need confirming`} text="Typo or mismatch. We ask, we do not reject.">
-              {typos.map((r) => <button key={r.id} className="chip" data-s="info" onClick={() => ui.open(r.id)}>{r.app.name.split(" ")[0]}</button>)}
-            </PinRow>
-            <PinRow icon="globe" s="exp" title={`${outside.length} valid pin${outside.length === 1 ? "" : "s"} we do not serve yet`} text="Kept on the Expansion list, not rejected.">
-              {outside.map((r) => <button key={r.id} className="chip" data-s="exp" onClick={() => ui.open(r.id)}>{r.app.name.split(" ")[0]}</button>)}
-              <button className="btn sm" onClick={() => ui.go("expansion")}>Open list</button>
-            </PinRow>
-          </div>
-        </Card>
-        <Card i={6}>
-          <h3><Ic n="clock" />Slow to reply · {asked.length}</h3>
-          <div className="stack" style={{ gap: 6 }}>
-            {asked.length ? (
-              asked.map((r) => (
-                <div key={r.id} className="row" style={{ gap: 10, padding: 8, borderRadius: "var(--r-sm)", background: "var(--surface2)" }}>
-                  <Ring v={r.fit} size={34} sw={4} s="info" />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <b>{r.app.name}</b>
-                    <div className="muted" style={{ fontSize: 12.5 }}>Asked {ago(desk.mail[r.id].at, now)}. {r.asks[0] ?? ""}</div>
-                  </div>
-                  <button className="btn sm" onClick={() => ui.open(r.id)}>Open</button>
-                  <button className="btn sm primary" onClick={() => { ws.remind(r.id); ui.toast(`Reminder sent to ${r.app.name}`); }}><Ic n="bell" />Remind</button>
+      <Card i={4}>
+        <h3>
+          <Ic n="shield" />Spot-check the engine · {spot.filter((id) => desk.spot[id]).length} of {spot.length}
+          <span className="sp" />
+          <span className="muted" style={{ fontWeight: 500, fontSize: 12 }}>{desk.guard.spot}% of decisions, checked by you</span>
+        </h3>
+        <div className="grid g2" style={{ gap: 6 }}>
+          {spot.map((id) => {
+            const r = rows.find((x) => x.id === id)!;
+            const done = desk.spot[id];
+            return (
+              <div key={id} className="row" style={{ gap: 10, padding: 8, borderRadius: "var(--r-sm)", background: "var(--surface2)" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <b>{r.app.name}</b> <Chip s={r.ui} />
+                  <div className="muted" style={{ fontSize: 12.5 }}>{r.why}</div>
                 </div>
-              ))
-            ) : (
-              <div className="muted">Everyone replied.</div>
-            )}
-          </div>
-        </Card>
-      </div>
+                {done ? (
+                  <span className="tag"><Ic n="check" />{done === "agree" ? "Agreed" : "Moved"}</span>
+                ) : (
+                  <>
+                    <button className="btn sm" onClick={() => ws.markSpot(id, "agree")}><Ic n="check" />Agree</button>
+                    <button className="btn sm" onClick={() => ui.move([id], { spot: true })}>Disagree</button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+          {!spot.length && <div className="muted">Nothing to check yet.</div>}
+        </div>
+      </Card>
     </div>
   );
 }

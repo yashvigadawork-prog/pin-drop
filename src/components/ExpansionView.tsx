@@ -24,18 +24,7 @@ export function ExpansionView() {
 
   return (
     <div className="stack">
-      <div className="grid g3">
-        {[
-          ["help", "info", "1 · Typo or wrong pin", "We ask them to confirm. Nothing is rejected."],
-          ["globe", "exp", "2 · Valid pin we do not serve", "They land on this list and get a polite email."],
-          ["check", "adv", "3 · Served and free", "Decided as usual: Proceed, new pin or Waitlist."],
-        ].map(([ic, s, t, d], i) => (
-          <div key={t} className="card row flat rise" data-s={s} style={{ "--i": i, gap: 12 } as CSSProperties}>
-            <BucketIcon icon={ic} />
-            <div><b>{t}</b><div className="muted" style={{ fontSize: 12.5 }}>{d}</div></div>
-          </div>
-        ))}
-      </div>
+      <p className="muted" style={{ margin: 0 }}>Valid pins we do not serve yet are kept here, not rejected. Typos are asked to confirm. Served pins are decided as usual.</p>
 
       {fresh.length > 0 && (
         <div className="card row rise" data-s="exp" style={{ gap: 12, borderColor: "color-mix(in srgb,var(--s-exp) 50%,var(--line))", flexWrap: "wrap" }}>
