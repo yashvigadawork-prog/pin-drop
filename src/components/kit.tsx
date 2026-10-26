@@ -42,6 +42,7 @@ export interface NavState {
   layers: { app: boolean; store: boolean; exp: boolean };
   period: "week" | "month";
   reason: string | null;
+  tier: "all" | "A" | "B" | "C";
   ovTab: "now" | "perf";
   placesTab: "terr" | "exp";
 }
@@ -69,6 +70,12 @@ export function Chip({ s, extra }: { s: UiStatus; extra?: string }) {
       {extra}
     </span>
   );
+}
+
+export function TierBadge({ t }: { t?: "A" | "B" | "C" }) {
+  if (!t) return null;
+  const tip = { A: "Tier A: the top slice of qualified applicants by score", B: "Tier B: the next slice", C: "Tier C: the rest" }[t];
+  return <span className="tier" data-t={t} title={tip}>{t}</span>;
 }
 
 export function Tag({ children, warn, icon, onClick }: { children: ReactNode; warn?: boolean; icon?: string; onClick?: () => void }) {

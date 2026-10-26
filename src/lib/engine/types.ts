@@ -220,6 +220,8 @@ export interface EngineConfig {
   phaseName: string;
   monthlyRevenue: Record<Tier, number>; // ₹ lakh / month, indicative store sales
   netMargin: number; // partner net margin on sales, used only for indicative payback
+  tierA?: number; // share of qualified applicants (by score) labelled Tier A, in percent. Default 10
+  tierB?: number; // cumulative share labelled Tier A or B, in percent. Default 40
   challengeMargin?: number; // points a stronger loser must beat a neighbouring pin's holder by, to be offered that pin too
   custom?: CustomRule[]; // assumptions the owner adds in the app, applied without a redeploy
 }

@@ -5,7 +5,7 @@ import { demoMail, parseEml, parsePasted } from "@/lib/desk/inbox";
 import { useRef, useState } from "react";
 import { Checklist, Gantt } from "./Checklist";
 import { Ic } from "./Icon";
-import { BucketIcon, Card, Empty, Ring, useUi } from "./kit";
+import { BucketIcon, Card, Empty, Ring, TierBadge, useUi } from "./kit";
 import { STAGES, CHECK_GROUPS } from "@/lib/desk/types";
 import { daysLeft } from "@/lib/desk/time";
 
@@ -37,7 +37,7 @@ export function OnboardingView() {
             <button key={pid} className="card hov rise row" style={{ "--i": i, gap: 12, textAlign: "left", padding: 12, ...(pid === id ? { borderColor: "var(--accent)" } : {}) } as CSSProperties} onClick={() => setNav({ onb: pid })}>
               <Ring v={(rec.stage / 12) * 100} size={48} sw={5} pct />
               <div style={{ minWidth: 0 }}>
-                <b>{r.app.name}</b>
+                <b>{r.app.name} <TierBadge t={r.tier} /></b>
                 <div className="muted" style={{ fontSize: 12 }}>{STAGES[rec.stage]} · {r.slotPin ?? r.app.pin}</div>
                 {fl > 0 && <span className="tag warn" style={{ marginTop: 4 }}><Ic n="alert" />{fl} flag</span>}
               </div>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Ic } from "./Icon";
-import { Chip, Ring, Tag, useUi } from "./kit";
+import { Chip, Ring, Tag, TierBadge, useUi } from "./kit";
 import { countBy, terrOf, type Row } from "@/lib/desk/model";
 import { REASON_META, reasonOf, type ReasonKey } from "@/lib/desk/metrics";
 import { UI_GROUPS, UI_META, UI_ORDER, type UiStatus } from "@/lib/desk/types";
@@ -25,6 +25,7 @@ export function PipelineView() {
 
   const grp = UI_GROUPS.find((g) => g.key === nav.filter);
   let list = base.filter((r) => nav.filter === "all" || (grp ? grp.members.includes(r.ui) : r.ui === nav.filter));
+  if (nav.tier !== "all") list = list.filter((r) => r.tier === nav.tier);
   if (nav.reason) list = list.filter((r) => reasonOf(r) === nav.reason);
   if (nav.terrF) list = list.filter((r) => terrOf(result, r.app.pin) === nav.terrF || r.slotTerr === nav.terrF);
   const q = nav.q.trim().toLowerCase();
@@ -40,6 +41,12 @@ export function PipelineView() {
           <input placeholder="Search name, pin, city" value={nav.q} onChange={(e) => setNav({ q: e.target.value })} />
         </label>
         <span className="sp" />
+        <select className="sel" aria-label="Tier" value={nav.tier} onChange={(e) => setNav({ tier: e.target.value as typeof nav.tier })}>
+          <option value="all">All tiers</option>
+          <option value="A">Tier A</option>
+          <option value="B">Tier B</option>
+          <option value="C">Tier C</option>
+        </select>
         <select className="sel" aria-label="Sort" value={nav.sort} onChange={(e) => setNav({ sort: e.target.value as typeof nav.sort })}>
           <option value="fit">Sort: best fit</option>
           <option value="status">Sort: status</option>
@@ -124,7 +131,7 @@ export function PipelineView() {
                         {d && <button className="tag" onClick={(e) => { e.stopPropagation(); if (d[2]) ui.go(d[2], { onb: r.id }); }}><Ic n={d[0]} />{d[1]}{d[2] ? " →" : ""}</button>}
                       </td>
                       <td data-l="Fit">
-                        <Ring v={r.fit} size={36} sw={4} s={r.ui} />
+                        <div className="row" style={{ gap: 6 }}><Ring v={r.fit} size={36} sw={4} s={r.ui} /><TierBadge t={r.tier} /></div>
                         {r.offer !== undefined && <div className="muted mono" style={{ fontSize: 10.5 }}>if moved {r.offer}</div>}
                       </td>
                       <td data-l="Why" className="muted" style={{ minWidth: 200 }}>{r.why}</td>

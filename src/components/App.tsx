@@ -35,7 +35,7 @@ const TITLES: Record<View, [string, string]> = {
   rulebook: ["Rulebook", "The rules and the assumptions behind every decision"],
   settings: ["Settings", "Areas, checks, email and history"],
 };
-const NAV0: NavState = { filter: "all", q: "", sort: "fit", showMoved: false, terrF: null, pick: {}, setting: "areas", onb: "", expF: null, expCity: "", city: null, layers: { app: true, store: true, exp: true }, period: "week", reason: null, ovTab: "now", placesTab: "terr" };
+const NAV0: NavState = { filter: "all", q: "", sort: "fit", showMoved: false, terrF: null, pick: {}, setting: "areas", onb: "", expF: null, expCity: "", city: null, layers: { app: true, store: true, exp: true }, period: "week", reason: null, tier: "all", ovTab: "now", placesTab: "terr" };
 
 function useTheme() {
   const [dark, setDark] = useState(false);

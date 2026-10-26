@@ -34,6 +34,7 @@ export const BRIEF: Record<string, string> = {
   timeline: "We plan the real earliest opening, not the hoped-for date. Faster targets are flagged.",
   training: "Training is in the partner's language, at a real store. First-time operators get extra training.",
   payback: "Payback is shown for information only. It never changes the ranking.",
+  tiers: "Qualified applicants are ranked by score. The top 10% are Tier A, the next 30% Tier B, the rest Tier C.",
   challenger: "If someone loses their pin but beats a neighbouring pin's holder by 10+ points, we flag that pin as an extra offer. You decide.",
   custom: "Assumptions you add apply on the next re-decide. A miss can ask a question, flag, or stop the application. Your choice.",
 };
@@ -49,6 +50,15 @@ export interface Rule {
 }
 
 export const RULES: Rule[] = [
+  {
+    id: "tiers",
+    gate: "Governance",
+    title: "Tiers A, B and C show who stands out",
+    rule: "Everyone who passes every check is ranked by score. The top share (default 10%) is Tier A, the next share (default up to 40%) is Tier B, and the rest are Tier C. Tiers only label. They never change a decision or a slot.",
+    why: "When most applicants are good, scores bunch together and the raw number stops separating people. Rank does. A short tier label tells the owner where to look first, at any pool size.",
+    assumption: "The 10% and 40% cut-offs are assumptions. Change them in Assumptions.",
+    evidence: [],
+  },
   {
     id: "challenger",
     gate: "Place",

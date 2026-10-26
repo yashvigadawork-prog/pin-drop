@@ -41,6 +41,8 @@ export function RulebookView() {
           <Num label="“Financing probable” band (%)" value={Math.round(draft.nearMissBand * 100)} onChange={(v) => setDraft({ ...draft, nearMissBand: v / 100 })} />
           <Num label="Minimum space (sq ft)" value={draft.minSqft} onChange={(v) => setDraft({ ...draft, minSqft: v })} />
           <Num label="Comfortable space from (sq ft)" value={draft.tightSqft} onChange={(v) => setDraft({ ...draft, tightSqft: v })} />
+          <Num label="Tier A: top share of qualified (%)" value={draft.tierA ?? 10} onChange={(v) => setDraft({ ...draft, tierA: v })} />
+          <Num label="Tier A + B: top share (%)" value={draft.tierB ?? 40} onChange={(v) => setDraft({ ...draft, tierB: v })} />
           <Num label="Challenger margin (points)" value={draft.challengeMargin ?? 10} onChange={(v) => setDraft({ ...draft, challengeMargin: v })} />
         </div>
 

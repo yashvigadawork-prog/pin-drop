@@ -70,6 +70,16 @@ export function evaluate(app: Application, ctx: Ctx): Evaluation {
   }
   if (app.state && app.state.toLowerCase() !== "karnataka")
     add({ code: "STATE_MISMATCH", gate: "data", severity: "warn", message: `State says "${app.state}", but every city in the plan is in Karnataka.`, fix: "Treated as Karnataka based on the city; confirm.", ruleId: "data-integrity" });
+  // Numbers that cannot be right become a question, never a silent pass or a hard no.
+  const badBits: string[] = [];
+  const invInvalid = app.investment !== null && app.investment < 0;
+  const sizeInvalid = app.sizeSqft !== null && app.sizeSqft < 0;
+  if (invInvalid) badBits.push(`investment of ₹${app.investment}L`);
+  if (app.experience !== null && (app.experience < 0 || app.experience > 60)) badBits.push(`${app.experience} years of experience`);
+  if (sizeInvalid) badBits.push(`a space of ${app.sizeSqft} sq ft`);
+  if (app.targetMonths !== null && app.targetMonths < 0) badBits.push(`a target of ${app.targetMonths} months`);
+  if (badBits.length)
+    add({ code: "VALUE_INVALID", gate: "data", severity: "block", message: `The form shows ${badBits.join(", ")}. That cannot be right.`, fix: "Ask the applicant to confirm these numbers before we judge the application.", ruleId: "data-integrity" });
   if (app.investment === null)
     add({ code: "INVESTMENT_MISSING", gate: "data", severity: "block", message: app.investmentRaw ? `Could not read investment "${app.investmentRaw}".` : "Investment capacity is blank.", fix: "Ask how much the applicant can invest (₹ lakh), with proof of funds.", ruleId: "capital" });
   if (app.experience === null)
@@ -80,8 +90,8 @@ export function evaluate(app: Application, ctx: Ctx): Evaluation {
   if (!app.space)
     add({ code: "SPACE_MISSING", gate: "data", severity: "block", message: app.spaceRaw ? `Could not read space status "${app.spaceRaw}".` : "Space status is blank.", fix: "Ask whether they own, rent, or still need to find a space.", ruleId: "data-integrity" });
 
-  let size = app.sizeSqft;
-  if ((app.space === "Owned" || app.space === "Rented") && size === null && !app.extra.sizePendingAudit) {
+  let size = sizeInvalid ? null : app.sizeSqft;
+  if ((app.space === "Owned" || app.space === "Rented") && size === null && !sizeInvalid && !app.extra.sizePendingAudit) {
     const fromNotes = sig("space_in_text");
     if (fromNotes) {
       size = Number(fromNotes.value);
@@ -132,7 +142,7 @@ export function evaluate(app: Application, ctx: Ctx): Evaluation {
   let requiredCapital: number | null = null;
   let effectiveCapital: number | null = null;
   if (tier) requiredCapital = config.minCapital[tier];
-  if (app.investment !== null) effectiveCapital = app.investment + (app.extra.extraCapital ?? 0);
+  if (app.investment !== null && !invInvalid) effectiveCapital = app.investment + (app.extra.extraCapital ?? 0);
   if (requiredCapital !== null && effectiveCapital !== null) {
     const ratio = effectiveCapital / requiredCapital;
     const gap = Math.round((requiredCapital - effectiveCapital) * 10) / 10;
@@ -291,7 +301,7 @@ function scoreOf(
     cap = r >= 1 ? 0.7 + 0.3 * Math.min((r - 1) / 0.5, 1) : r >= 1 - config.nearMissBand ? 0.45 : 0.1;
     notes.partner.push(`Capital ₹${effective}L vs ₹${required}L needed (${Math.round(r * 100)}%).`);
   }
-  const yrs = app.experience ?? 0;
+  const yrs = Math.max(0, Math.min(app.experience ?? 0, 60));
   const expScore = 0.15 + 0.85 * Math.min(yrs / 8, 1);
   notes.partner.push(`${yrs} yrs retail experience.`);
   let partner = 0.6 * cap + 0.4 * expScore;

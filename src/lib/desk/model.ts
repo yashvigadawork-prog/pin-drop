@@ -20,6 +20,7 @@ export interface Row {
   slotPin?: string;
   slotTerr?: string;
   withdrawn: boolean;
+  tier?: "A" | "B" | "C"; // rank band among everyone who passes every check
 }
 
 const has = (d: Decision, code: string) => d.issues.some((i) => i.code === code);
@@ -57,7 +58,7 @@ export function shortWhy(d: Decision, ui: UiStatus): string {
 }
 
 export function buildRows(input: EngineInput, result: EngineResult, desk: Desk): Row[] {
-  return result.order.map((id) => {
+  const rows: Row[] = result.order.map((id) => {
     const d = result.decisions[id];
     const app = input.applications.find((a) => a.id === id)!;
     const engine = engineUi(d);
@@ -88,6 +89,15 @@ export function buildRows(input: EngineInput, result: EngineResult, desk: Desk):
       withdrawn,
     };
   });
+  // Tiers: the top slice of everyone who passes every check is A, the next slice B, the rest C.
+  // Scores bunch near the top when most applicants are good, so rank says more than the raw number.
+  const pool = rows.filter((r) => !r.withdrawn && (r.engine === "adv" || r.engine === "redir" || r.engine === "wait")).sort((a, b) => b.fit - a.fit || a.id.localeCompare(b.id));
+  const aCut = Math.ceil((pool.length * (result.config.tierA ?? 10)) / 100);
+  const bCut = Math.ceil((pool.length * (result.config.tierB ?? 40)) / 100);
+  pool.forEach((r, i) => {
+    r.tier = i < aCut ? "A" : i < bCut ? "B" : "C";
+  });
+  return rows;
 }
 
 export function active(rows: Row[]): Row[] {

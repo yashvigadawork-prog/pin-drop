@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import { Ic } from "./Icon";
-import { Card, Chip, Ring, useUi } from "./kit";
+import { Card, Chip, Ring, TierBadge, useUi } from "./kit";
 import { itemsFor, type Item } from "./Modals";
 import { active, countBy, spotIds } from "@/lib/desk/model";
 import { ago } from "@/lib/desk/time";
@@ -53,7 +53,7 @@ function ApprovalCard({ it, i, on, toggle }: { it: Item; i: number; on: boolean;
         <input type="checkbox" aria-label={`Select ${it.name}`} checked={on} onClick={(e) => e.stopPropagation()} onChange={toggle} />
         {r && <Ring v={it.s === "redir" && r.offer ? r.offer : r.fit} size={38} sw={4.5} s={r.ui} />}
         <div style={{ minWidth: 0, flex: 1 }}>
-          <b className="clip1">{it.name}</b>
+          <b className="clip1">{it.name} <TierBadge t={r?.tier} /></b>
           <div className="muted clip1" style={{ fontSize: 12 }}>{it.city} · {it.pin}</div>
         </div>
       </div>
@@ -136,7 +136,7 @@ export function NowView() {
   return (
     <div className="stack">
       <div className="grid g4 kpis">
-        <Kpi i={0} s="adv" icon="check" label="Waiting for your yes" n={yes.length} sub={yes[0] ? `Best fit: ${yes[0].row?.fit ?? ""}` : "All clear"} onClick={() => jump("queue-card")} />
+        <Kpi i={0} s="adv" icon="check" label="Waiting for your yes" n={yes.length} sub={yes.length ? (["A", "B", "C"] as const).map((k) => [k, yes.filter((x) => x.row?.tier === k).length] as const).filter(([, n]) => n > 0).map(([k, n]) => `${n} Tier ${k}`).join(" · ") || "Ready to approve" : "All clear"} onClick={() => jump("queue-card")} />
         <Kpi i={1} s="info" icon="mail" label="Emails ready to send" n={emails} sub={`${groups.info.length} ask · ${groups.wait.length} waitlist · ${groups.later.length} not now`} onClick={() => jump("emails-card")} />
         <Kpi i={2} s="redir" icon="file" label="Documents to review" n={docs} sub={docs ? `${toReview.length} partner${toReview.length === 1 ? "" : "s"}` : "Nothing waiting"} onClick={() => (toReview[0] ? ui.go("onboarding", { onb: toReview[0].id }) : ui.go("onboarding"))} />
         <Kpi i={3} s="wait" icon="inbox" label="Replies and chasing" n={desk.replies.length + asked.length} sub={`${desk.replies.length} to read · ${asked.length} slow`} onClick={() => jump("inbox-card")} />

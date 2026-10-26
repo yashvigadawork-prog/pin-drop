@@ -3,7 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import { Checklist, Gantt } from "./Checklist";
 import { Ic } from "./Icon";
-import { Chip, Ring, useUi, type DrawerTab } from "./kit";
+import { Chip, Ring, TierBadge, useUi, type DrawerTab } from "./kit";
 import { fmtDate } from "@/lib/engine/engine";
 import { ctxFromRow, defaultMailType, mailFor } from "@/lib/desk/mail";
 import { readPaste } from "@/lib/desk/paste";
@@ -54,6 +54,7 @@ export function Drawer({ id, tab, setTab, paste, onClose }: { id: string; tab: D
         </div>
         <div className="row wrap" style={{ gap: 6, marginTop: 12 }}>
           <Chip s={r.ui} />
+          {r.tier && <span className="tag"><TierBadge t={r.tier} />Tier {r.tier}</span>}
           {tags}
         </div>
         <div className="tabs" role="tablist">
