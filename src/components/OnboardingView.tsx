@@ -84,7 +84,7 @@ export function OnboardingView() {
         <PartnerInbox id={id} name={row.app.name} />
 
         <Card i={1}>
-          <h3><Ic n="shield" />Checks<span className="sp" /><span className="muted" style={{ fontWeight: 500, fontSize: 12 }}>Groups can be switched off in Rules and settings</span></h3>
+          <h3><Ic n="shield" />Checks<span className="sp" /><span className="muted" style={{ fontWeight: 500, fontSize: 12 }}>Groups can be switched off in Settings</span></h3>
           <Checklist o={o} mods={desk.mods} interactive id={id} onCycle={(k) => ws.cycleCheck(id, k)} onSet={(k, st) => ws.setCheck(id, k, st)} onRemind={() => ui.toast(`Reminder sent to ${row.app.name.split(" ")[0]}`)} />
         </Card>
 

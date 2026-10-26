@@ -1,7 +1,7 @@
 import type { Row } from "./model";
 import { countBy } from "./model";
 import { stageTimes } from "./metrics";
-import { UI_META, UI_ORDER, type Desk, type UiStatus } from "./types";
+import { UI_GROUPS, UI_META, type Desk, type UiStatus } from "./types";
 
 // Answers the questions people ask most, straight from the records, with no AI.
 // Returns null when the question is not one of these, so the caller can try the AI.
@@ -38,12 +38,18 @@ export function deskAnswer(q: string, rows: Row[], desk: Desk, ids: string[], no
     const worst = stageTimes(desk, now).filter((s) => s.avg !== null && s.avg > s.target).sort((a, b) => b.avg! - b.target - (a.avg! - a.target))[0];
     return { ids: [], text: worst ? `Biggest wait: ${worst.name}, ${worst.avg} days against a ${worst.target}-day target. See Overview.` : "No bottleneck yet. Times fill in as emails go out and partners reply." };
   }
+  const sw = STATUS_WORDS.find(([re]) => re.test(t));
   if (/how many|count|number of/.test(t)) {
     const pool = city ? rows.filter((r) => (r.app.city ?? r.app.cityRaw) === city) : rows;
+    if (sw) {
+      const g = UI_GROUPS.find((x) => x.members.includes(sw[1]));
+      const members = g?.members ?? [sw[1]];
+      const list = pool.filter((r) => members.includes(r.ui));
+      return { ids: list.slice(0, 8).map((r) => r.id), text: `${list.length} ${g?.label ?? UI_META[sw[1]].label}${city ? ` in ${city}` : ""}.` };
+    }
     const c = countBy(pool);
-    return { ids: [], text: `${pool.length} applicants${city ? ` in ${city}` : ""}:\n${UI_ORDER.filter((s) => c[s]).map((s) => `• ${UI_META[s].label}: ${c[s]}`).join("\n")}` };
+    return { ids: [], text: `${pool.length} applicants${city ? ` in ${city}` : ""}:\n${UI_GROUPS.map((g) => `• ${g.label}: ${g.members.reduce((n, m) => n + c[m], 0)}`).join("\n")}` };
   }
-  const sw = STATUS_WORDS.find(([re]) => re.test(t));
   if (/\btop\b|\bbest\b|strongest/.test(t) && !sw) {
     const n = Number((t.match(/top\s*(\d+)/) ?? [])[1] ?? 5);
     const list = rows.filter((r) => !r.moved && (r.ui === "adv" || r.ui === "redir")).sort((a, b) => b.fit - a.fit).slice(0, n);
