@@ -446,3 +446,21 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .fpc.mid { color: var(--s-wait); background: color-mix(in srgb, var(--s-wait) 14%, var(--surface)); }
 .fpc.low { color: var(--s-no); background: color-mix(in srgb, var(--s-no) 14%, var(--surface)); }
 @media (max-width: 760px) { .fstep { grid-template-columns: 104px minmax(0, 1fr) 46px; gap: 6px; } .flabel { font-size: 11.5px; } .flabel i { display: none; } }
+
+/* Needs you now: lower cards animate in */
+.stackbar button { transform-origin: left; animation: bar .8s cubic-bezier(.3,.7,.2,1) backwards; }
+.stackbar button:nth-child(2) { animation-delay: .1s; }
+.stackbar button:nth-child(3) { animation-delay: .2s; }
+.stackbar button:nth-child(4) { animation-delay: .3s; }
+.legrow { animation: rise .5s cubic-bezier(.2,.7,.2,1) backwards; }
+.stack > .legrow:nth-child(1), .alert:nth-child(1) { animation-delay: .35s; }
+.stack > .legrow:nth-child(2), .alert:nth-child(2) { animation-delay: .43s; }
+.stack > .legrow:nth-child(3), .alert:nth-child(3) { animation-delay: .51s; }
+.stack > .legrow:nth-child(4), .alert:nth-child(4) { animation-delay: .59s; }
+.meter i { transform-origin: left; animation: bar .9s cubic-bezier(.3,.7,.2,1) backwards .3s; }
+.stack > button:nth-child(2) .meter i { animation-delay: .38s; }
+.stack > button:nth-child(3) .meter i { animation-delay: .46s; }
+.stack > button:nth-child(4) .meter i { animation-delay: .54s; }
+.stack > button:nth-child(5) .meter i { animation-delay: .62s; }
+.stack > button:nth-child(n+6) .meter i { animation-delay: .7s; }
+.alert { animation: slidein .5s cubic-bezier(.2,.7,.2,1) backwards; }
