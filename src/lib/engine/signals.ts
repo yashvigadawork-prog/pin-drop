@@ -17,12 +17,12 @@ function snippet(text: string, index: number, len: number): string {
 const RULES: { kind: Signal["kind"]; re: RegExp; field: "business" | "notes" | "both" }[] = [
   {
     kind: "owner_not_operator",
-    re: /hire (a |an )?(store |shop )?manager|manager will (run|handle|manage)|will not be (present|involved|available)|not be (at|in) the (store|shop)|passive|investor only|only invest|sleeping partner|\bnri\b|abroad|overseas|(son|daughter|brother|sister|wife|husband|nephew|cousin|relative|father|mother) will (run|manage|handle|look after)|someone else will (run|manage)|part[- ]time|on weekends|alongside my (job|work)|keep my (job|day job)/i,
+    re: /hire (a |an )?(store |shop )?manager|manager will (run|handle|manage)|will not be (present|involved|available)|not be (at|in) the (store|shop)|passive|investor only|only invest|sleeping partner|\bnri\b|abroad|overseas|(son|daughter|brother|sister|wife|husband|nephew|cousin|relative|father|mother) will (run|manage|handle|look after)|someone else will (run|manage)|part[- ]time|on weekends|alongside my (job|work)|keep my (job|day job)|govern?ment (job|employee|servant|service)|govt\.? (job|employee)|notice period|current job|salaried/i,
     field: "both",
   },
   {
     kind: "funding_conditional",
-    re: /\bloans?\b|bank financ|financ(e|ing) (needed|required|from|via|through|pending)|need(s)? (funding|financing|money|an investor|investor)|\bemi\b|depends on|subject to|awaiting|pending (approval|sanction)|borrow|mortgage|once (i|we) (sell|get)/i,
+    re: /\bloans?\b|bank financ|financ(e|ing) (needed|required|from|via|through|pending)|need(s)? (funding|financing|money|an investor|investor)|\bemi\b|depends on|subject to|awaiting|pending (approval|sanction)|borrow|mortgage|once (i|we) (sell|get)|after (i|we) (sell|get|receive)|sale of (my |the |our )?(land|plot|property|house|flat|shop|farm)|from (the )?sale|will (send|arrange|come)/i,
     field: "both",
   },
   {
@@ -37,7 +37,9 @@ const RULES: { kind: Signal["kind"]; re: RegExp; field: "business" | "notes" | "
     field: "business",
   },
   { kind: "multi_unit_operator", re: /franchisee (of|for)|run(s|ning)? (a |an |two |three |\d+ )?franchise|multiple (stores|outlets|shops)|(two|three|\d+) (stores|outlets|shops)|chain of/i, field: "both" },
-  { kind: "floor_mentioned_upper", re: /first floor|1st floor|upper floor|second floor|2nd floor|above (a|the)|basement|mezzanine/i, field: "notes" },
+  { kind: "floor_mentioned_upper", re: /first floor|1st floor|upper floor|second floor|2nd floor|third floor|3rd floor|fourth floor|4th floor|above (a|the)|basement|mezzanine|terrace|g ?\+ ?\d/i, field: "notes" },
+  { kind: "competitor_franchise", re: /(currently|already|also)[^.]{0,20}franchisee|competitor|rival brand|other brand/i, field: "both" },
+  { kind: "legal_issue", re: /court case|litigation|legal dispute|title (dispute|issue)|\bdispute\b|sub judice/i, field: "both" },
   { kind: "floor_mentioned_ground", re: /ground floor|road.?facing|main road|street.?facing|high street/i, field: "notes" },
 ];
 
@@ -73,7 +75,8 @@ export function extractSignals(app: Application, today: Date): Signal[] {
 
   for (const f of FESTIVALS) {
     const m = (fields.notes + " " + fields.business).match(f.match);
-    if (m && m.index !== undefined) {
+    const after = m && m.index !== undefined && /\bafter\s+(the\s+)?$/i.test((fields.notes + " " + fields.business).slice(Math.max(0, m.index - 12), m.index));
+    if (m && m.index !== undefined && !after) {
       const next = f.dates.map((d) => new Date(d + "T00:00:00")).find((d) => d.getTime() > today.getTime());
       if (next) {
         const months = (next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30.44);

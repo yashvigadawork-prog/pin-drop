@@ -49,8 +49,8 @@ function limited(ip: string) {
 }
 
 export async function POST(req: Request) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return Response.json({ error: "AI not configured" }, { status: 503 });
+  const keys = [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2, process.env.GEMINI_API_KEY_3].filter((k): k is string => !!k);
+  if (!keys.length) return Response.json({ error: "AI not configured" }, { status: 503 });
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local";
   if (limited(ip)) return Response.json({ error: "Too many requests — try again in a minute." }, { status: 429 });
 
@@ -71,29 +71,32 @@ export async function POST(req: Request) {
     generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.1, maxOutputTokens: 1024 },
   };
 
+  // Try every key, and every model on each key, so one exhausted key or one busy model does not break the chat.
   const errors: string[] = [];
-  for (const model of MODELS) {
-    try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(14_000),
-      });
-      const j = await r.json();
-      if (!r.ok) {
-        errors.push(`${model}: ${j?.error?.message?.slice(0, 120) ?? r.status}`);
-        continue;
+  for (const [ki, key] of keys.entries()) {
+    for (const model of MODELS) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(14_000),
+        });
+        const j = await r.json();
+        if (!r.ok) {
+          errors.push(`key${ki + 1}/${model}: ${j?.error?.message?.slice(0, 100) ?? r.status}`);
+          if (r.status === 429 || r.status === 403) break; // this key is out of quota: move to the next key
+          continue;
+        }
+        const text: string | undefined = j?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("");
+        if (!text) {
+          errors.push(`key${ki + 1}/${model}: empty`);
+          continue;
+        }
+        return Response.json({ ...JSON.parse(text), model });
+      } catch (e) {
+        errors.push(`key${ki + 1}/${model}: ${(e as Error).name === "TimeoutError" ? "timeout" : (e as Error).message.slice(0, 80)}`);
       }
-      const text: string | undefined = j?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("");
-      if (!text) {
-        errors.push(`${model}: empty`);
-        continue;
-      }
-      const parsed = JSON.parse(text);
-      return Response.json({ ...parsed, model });
-    } catch (e) {
-      errors.push(`${model}: ${(e as Error).name === "TimeoutError" ? "timeout" : (e as Error).message.slice(0, 80)}`);
     }
   }
   return Response.json({ error: "AI unavailable", details: errors }, { status: 502 });

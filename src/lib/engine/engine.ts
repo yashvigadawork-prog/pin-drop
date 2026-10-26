@@ -42,8 +42,8 @@ export function runEngine(input: EngineInput, config: EngineConfig = DEFAULT_CON
   const duplicates = new Map<string, string>();
   const firstSeen = new Map<string, string>();
   for (const a of input.applications) {
-    const key = `${a.name.toLowerCase().replace(/[^a-z]/g, "")}|${a.pin ?? a.pinRaw}`;
-    if (!a.name) continue;
+    const key = `${a.name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")}|${a.pin ?? a.pinRaw}`;
+    if (!a.name.trim()) continue;
     if (firstSeen.has(key)) duplicates.set(a.id, firstSeen.get(key)!);
     else firstSeen.set(key, a.id);
   }
@@ -66,6 +66,7 @@ export function runEngine(input: EngineInput, config: EngineConfig = DEFAULT_CON
     });
   }
   const takenPins = new Map<string, string>(); // pin -> app id
+  const relocation = new Map<string, ScoreBreakdown>(); // score for opening in a pin they did not apply for
   const result = new Map<string, { status: Status; allocation: Allocation | null; competition: Competition | null; owner?: OwnerAction; extraNotes: string[] }>();
 
   const take = (appId: string, territoryId: string, pin: string, kind: Allocation["kind"], locked: boolean): Allocation | null => {
@@ -89,7 +90,10 @@ export function runEngine(input: EngineInput, config: EngineConfig = DEFAULT_CON
     if (!act) continue;
     if (act.action === "confirm" && act.allocation) {
       const alloc = take(id, act.allocation.territoryId, act.allocation.pin, act.allocation.kind, true);
-      if (alloc) result.set(id, { status: alloc.kind === "redirect" ? "REDIRECT" : "ADVANCE", allocation: alloc, competition: null, owner: act, extraNotes: [] });
+      if (alloc) {
+        if (alloc.kind === "redirect") relocation.set(id, relocationScore(ev, config));
+        result.set(id, { status: alloc.kind === "redirect" ? "REDIRECT" : "ADVANCE", allocation: alloc, competition: null, owner: act, extraNotes: [] });
+      }
     } else if (act.action === "confirm") {
       // Confirming a non-allocating recommendation is recorded but does not freeze it.
     } else if (act.action === "override" && act.status) {
@@ -119,7 +123,6 @@ export function runEngine(input: EngineInput, config: EngineConfig = DEFAULT_CON
   // and may decline the move), so moving a partner is never "free".
   // Pins that other applicants applied for (including those on hold) are offered last,
   // so a redirect never quietly takes someone else's chosen location.
-  const relocation = new Map<string, ScoreBreakdown>();
   const claimed = new Set<string>();
   for (const ev of evals.values()) if (ev.app.pin && !ev.app.extra.withdrawn && !ev.hardBlocks.length) claimed.add(ev.app.pin);
   for (const ev of competing) slots.get(ev.territory!.id)!.view.contenders.push(ev.app.id);

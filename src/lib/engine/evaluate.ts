@@ -166,6 +166,12 @@ export function evaluate(app: Application, ctx: Ctx): Evaluation {
   const passive = sig("owner_not_operator");
   if (passive && !app.extra.ownerOperatorConfirmed)
     add({ code: "OWNER_OPERATOR_QUESTION", gate: "partner", severity: "warn", message: "Reads like the applicant may not run the store day-to-day.", evidence: passive.quote, fix: "Ask who will run the store full-time; that person must complete the full training.", ruleId: "owner-operator" });
+  const comp = sig("competitor_franchise");
+  if (comp)
+    add({ code: "COMPETITOR_CONFLICT", gate: "partner", severity: "warn", message: "Mentions another brand's franchise or a competitor.", evidence: comp.quote, fix: "Ask whether they hold a competing franchise and whether that agreement allows ours.", ruleId: "data-integrity" });
+  const legal = sig("legal_issue");
+  if (legal)
+    add({ code: "LEGAL_DISPUTE", gate: "premises", severity: "warn", message: "Mentions a legal dispute.", evidence: legal.quote, fix: "Ask for the property title copy and the current status of the case before any agreement.", ruleId: "data-integrity" });
   if ((app.experience ?? 0) === 0)
     add({ code: "NO_EXPERIENCE", gate: "partner", severity: "info", message: "No retail experience — not a blocker; gets the extended training track.", ruleId: "experience" });
 

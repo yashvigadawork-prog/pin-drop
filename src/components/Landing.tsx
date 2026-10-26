@@ -1,73 +1,89 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
+import { Ic, Logo } from "./Icon";
+import { MapCanvas } from "./MapCanvas";
 
-export function Landing({ onFile, onSample, loading, error }: { onFile: (f: File) => void; onSample: () => void; loading: boolean; error: string | null }) {
+const GATES: [string, string, string][] = [
+  ["file", "Application", "Complete and consistent?"],
+  ["pin", "Place", "Pin free and in a target area?"],
+  ["wallet", "Partner", "Capital and experience?"],
+  ["build", "Premises", "Space fits the format?"],
+  ["clock", "Pace", "Realistic timeline?"],
+];
+const STEPS: [string, string, string, string][] = [
+  ["upload", "redir", "1 · Drop the file", "We read it, flag gaps and skip the template example row."],
+  ["target", "adv", "2 · Decide", "Five gates, one clear reason, a score you can inspect."],
+  ["send", "info", "3 · Act", "Emails, onboarding checklist and an expansion list, all in one place."],
+];
+
+export function Landing({ onFile, onSample, loading, error, dark, onTheme }: { onFile: (f: File) => void; onSample: () => void; loading: boolean; error: string | null; dark: boolean; onTheme: () => void }) {
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 sm:py-14">
-      <div className="max-w-2xl">
-        <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">Franchise expansion · Karnataka</div>
-        <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">From application to an open, trained store — every decision explained.</h1>
-        <p className="mt-3 text-base text-slate-600">
-          Upload the applications and territories sheet. PartnerPath checks every applicant against five gates, gives each territory&apos;s slots to the strongest partners without ever putting two stores in one pin, and builds an opening and training plan for each partner who moves forward. The expansion owner makes the final call.
-        </p>
-      </div>
-
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDrag(true);
-        }}
-        onDragLeave={() => setDrag(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDrag(false);
-          const f = e.dataTransfer.files[0];
-          if (f) onFile(f);
-        }}
-        className={`mt-8 rounded-2xl border-2 border-dashed p-8 text-center transition ${drag ? "border-indigo-500 bg-indigo-50" : "border-slate-300 bg-white"}`}
-      >
-        <input ref={input} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
-        <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
-          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 16V4m0 0l-4 4m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg>
-        </div>
-        <p className="mt-3 font-medium text-slate-900">{loading ? "Reading the file…" : "Drop the Excel file here"}</p>
-        <p className="text-sm text-slate-500">The Case 1 template: Applications, Territories, Existing stores</p>
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          <button onClick={() => input.current?.click()} disabled={loading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
-            Choose file
-          </button>
-          <button onClick={onSample} disabled={loading} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-            Try with messy sample data
-          </button>
-          <a href="/Case1_Franchise_Test_Data_Format.xlsx" className="rounded-lg px-4 py-2 text-sm text-slate-500 hover:bg-slate-100">
-            Download blank template
-          </a>
-        </div>
-        {error && <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
-        <p className="mt-4 text-xs text-slate-400">The file is read in your browser. No login needed.</p>
-      </div>
-
-      <div className="mt-10 grid gap-3 sm:grid-cols-5">
-        {[
-          ["0", "Application", "Complete and consistent? Contradictions become questions, not rejections."],
-          ["1", "Place", "Inside a target territory? Pin free of existing stores?"],
-          ["2", "Partner", "Capital for the city tier? Will they run it themselves?"],
-          ["3", "Premises", "Ground floor or mall, at least 250 sq ft?"],
-          ["4", "Pace", "Can they really open when they say?"],
-        ].map(([n, t, d]) => (
-          <div key={n} className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="text-xs font-semibold text-indigo-600">Gate {n}</div>
-            <div className="mt-1 font-semibold text-slate-900">{t}</div>
-            <p className="mt-1 text-sm text-slate-600">{d}</p>
+    <div className="landing">
+      <div className="lwrap">
+        <header className="row">
+          <div className="brand" style={{ padding: 0 }}><Logo />Pin Drop</div>
+          <span className="sp" />
+          <span className="tag"><Ic n="target" />Case 1 · Franchise partner engine</span>
+          <button className="btn sm round" aria-label="Switch light and dark theme" onClick={onTheme}><Ic n={dark ? "sun" : "moon"} /></button>
+        </header>
+        <div className="lhero">
+          <div className="stack" style={{ gap: 20 }}>
+            <span className="eyebrow rise">Franchise expansion · Karnataka</span>
+            <h1 className="rise" style={{ "--i": 1 } as CSSProperties}>Applications in. <em>Open stores</em> out.</h1>
+            <p className="muted rise" style={{ "--i": 2, fontSize: 17, maxWidth: "42ch" } as CSSProperties}>Upload applications and territories. Get a decision, a reason and a plan for every partner.</p>
+            <div
+              className={`drop-zone rise${drag ? " over" : ""}`}
+              style={{ "--i": 3 } as CSSProperties}
+              onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+              onDragLeave={() => setDrag(false)}
+              onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) onFile(f); }}
+            >
+              <input ref={input} type="file" accept=".xlsx,.xls,.csv" className="hidden" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+              <div className="row" style={{ gap: 12 }}>
+                <span className="bucket" data-s="redir"><span className="ic"><Ic n="upload" /></span></span>
+                <div>
+                  <b style={{ fontSize: 16 }}>{loading ? "Reading the file…" : "Drop your Excel file"}</b>
+                  <div className="muted" style={{ fontSize: 12.5 }}>Applications · Territories · Existing stores. Read in your browser. No login.</div>
+                </div>
+              </div>
+              <div className="row wrap">
+                <button className="btn" disabled={loading} onClick={() => input.current?.click()}><Ic n="file" />Choose file</button>
+                <button className="btn primary" disabled={loading} onClick={onSample}><Ic n="spark" />Try the sample data</button>
+                <a className="btn ghost" href="/Case1_Franchise_Test_Data_Format.xlsx">Download blank template</a>
+              </div>
+              {error && <p className="tag warn" style={{ whiteSpace: "normal" }}>{error}</p>}
+            </div>
+            <div className="row wrap rise" style={{ "--i": 4 } as CSSProperties}>
+              <span className="tag"><Ic n="plus" />Extra columns picked up if present</span>
+              <span className="tag"><Ic n="msg" />Paste any reply, we fill the fields</span>
+              <span className="tag"><Ic n="globe" />Unserved pins kept for later</span>
+            </div>
           </div>
-        ))}
+          <div className="map rise" style={{ "--i": 2 } as CSSProperties}><MapCanvas compact /></div>
+        </div>
+        <div className="steps3">
+          {STEPS.map(([ic, s, t, d], i) => (
+            <div key={t} className="card rise" data-s={s} style={{ "--i": i + 4 } as CSSProperties}>
+              <div className="bucket"><span className="ic"><Ic n={ic} /></span><h3 style={{ margin: 0 }}>{t}</h3><p>{d}</p></div>
+            </div>
+          ))}
+        </div>
+        <div className="card rise" style={{ "--i": 7 } as CSSProperties}>
+          <h3><Ic n="shield" />Five gates every applicant passes</h3>
+          <div className="gatesrow">
+            {GATES.map(([ic, t, d], i) => (
+              <div key={t} className="gate pop" data-g="p" style={{ "--i": i + 8 } as CSSProperties}>
+                <span className="g"><Ic n={ic} /></span>
+                <b>{t}</b>
+                <span className="muted" style={{ fontWeight: 500 }}>{d}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-      <p className="mt-4 text-sm text-slate-500">
-        Then: <b className="text-slate-700">competition</b> (best fit score wins a contested slot, one store per pin) → <b className="text-slate-700">readiness plan</b> (opening path, training in their language, mentor store) → <b className="text-slate-700">owner sign-off</b>.
-      </p>
     </div>
   );
 }

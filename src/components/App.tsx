@@ -1,184 +1,241 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { exportWorkbook } from "@/lib/export";
-import { ruleById } from "@/lib/engine/rulebook";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatPanel } from "./ChatPanel";
-import { DecisionsTab } from "./DecisionsTab";
-import { DetailDrawer } from "./DetailDrawer";
+import { Drawer } from "./Drawer";
+import { ExpansionView } from "./ExpansionView";
+import { Ic, Logo } from "./Icon";
 import { Landing } from "./Landing";
-import { AuditTab, ChangeList, RulebookTab, TerritoriesTab } from "./OtherTabs";
-import { EvidenceList, Modal } from "./ui";
+import { MapView } from "./MapView";
+import { ModalHost } from "./Modals";
+import { OnboardingView } from "./OnboardingView";
+import { OverviewView } from "./OverviewView";
+import { PipelineView } from "./PipelineView";
+import { SettingsView } from "./SettingsView";
+import { TodayView } from "./TodayView";
+import { UiCtx, type DrawerTab, type ModalState, type NavState, type ReviewBucket, type Ui, type View } from "./kit";
 import { useWorkspace } from "./useWorkspace";
-import { WeightsPanel } from "./WeightsPanel";
+import { exportWorkbook } from "@/lib/export";
+import { active } from "@/lib/desk/model";
+import type { UiStatus } from "@/lib/desk/types";
 
-type Tab = "decisions" | "territories" | "rulebook" | "audit";
+const NAV: [View, string, string][] = [
+  ["overview", "bar", "Overview"],
+  ["today", "today", "Today"],
+  ["pipeline", "list", "Pipeline"],
+  ["map", "map", "Map"],
+  ["expansion", "globe", "Expansion list"],
+  ["onboarding", "clip", "Onboarding"],
+  ["settings", "sliders", "Rules and settings"],
+];
+const TITLES: Record<View, [string, string]> = {
+  overview: ["Overview", "How the whole pipeline is doing"],
+  today: ["Today", "What needs you now"],
+  pipeline: ["Pipeline", "Applicants still being decided"],
+  map: ["Map", "Where partners and demand sit"],
+  expansion: ["Expansion list", "People to call when we grow"],
+  onboarding: ["Onboarding", "From yes to open store"],
+  settings: ["Rules and settings", "Ranking, areas, checks, safeguards"],
+};
+const NAV0: NavState = { filter: "all", q: "", sort: "fit", mode: "list", showMoved: false, terrF: null, pick: {}, setting: "phase", onb: "", expF: null, expCity: "", city: null, layers: { app: true, store: true, exp: true }, period: "week" };
+
+function useTheme() {
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    let t: string | null = null;
+    try {
+      t = localStorage.getItem("pd-theme");
+    } catch {}
+    const d = t ? t === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    if (t) document.documentElement.dataset.theme = t;
+    const id = setTimeout(() => setDark(d), 0);
+    return () => clearTimeout(id);
+  }, []);
+  const toggle = useCallback(() => {
+    const n = dark ? "light" : "dark";
+    document.documentElement.dataset.theme = n;
+    try {
+      localStorage.setItem("pd-theme", n);
+    } catch {}
+    setDark(!dark);
+  }, [dark]);
+  return { dark, toggle };
+}
 
 export default function App() {
   const ws = useWorkspace();
-  const { result, input, state } = ws;
-  const [tab, setTab] = useState<Tab>("decisions");
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [ruleId, setRuleId] = useState<string | null>(null);
-  const [inject, setInject] = useState<{ text: string; n: number } | null>(null);
+  const { result, input, rows, desk } = ws;
+  const theme = useTheme();
+  const [view, setView] = useState<View>("overview");
+  const [nav, setNavState] = useState<NavState>(NAV0);
+  const [drawer, setDrawer] = useState<{ id: string; tab: DrawerTab; paste?: string } | null>(null);
+  const [modal, setModal] = useState<ModalState | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [seed, setSeed] = useState<{ text: string; n: number } | null>(null);
+  const [toast, setToastState] = useState<{ text: string; act?: { label: string; run: () => void } } | null>(null);
+  const [now, setNow] = useState(0);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seedN = useRef(0);
+  const content = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!ws.lastChanges) return;
-    const t = setTimeout(() => ws.clearLastChanges(), 9000);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ws.lastChanges?.at]);
+    const t = setTimeout(() => setNow(Date.now()), 0);
+    const iv = setInterval(() => setNow(Date.now()), 60000);
+    return () => {
+      clearTimeout(t);
+      clearInterval(iv);
+    };
+  }, []);
 
-  const rule = ruleById(ruleId ?? undefined);
-  const openApp = openId && result?.decisions[openId] ? openId : null;
+  const setNav = useCallback((n: Partial<NavState>) => setNavState((s) => ({ ...s, ...n })), []);
+  const showToast = useCallback((text: string, act?: { label: string; run: () => void }) => {
+    setToastState({ text, act });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastState(null), act ? 6500 : 2800);
+  }, []);
+  const closeAll = useCallback(() => {
+    setDrawer(null);
+    setModal(null);
+  }, []);
+
+  const go = useCallback<Ui["go"]>(
+    (v, o = {}) => {
+      setView(v);
+      closeAll();
+      setNavState((s) => ({
+        ...s,
+        ...(o.filter !== undefined ? { filter: o.filter as UiStatus | "all", terrF: null, mode: "list" as const } : {}),
+        ...(o.terr !== undefined ? { terrF: o.terr, filter: "all" as const } : {}),
+        ...(o.showMoved !== undefined ? { showMoved: o.showMoved } : {}),
+        ...(o.mode ? { mode: o.mode } : {}),
+        ...(o.onb ? { onb: o.onb } : {}),
+        ...(o.settings ? { setting: o.settings } : {}),
+        ...(o.expF !== undefined ? { expF: o.expF } : {}),
+        ...(o.expCity ? { expCity: o.expCity } : {}),
+      }));
+      content.current?.scrollTo({ top: 0 });
+    },
+    [closeAll],
+  );
+
+  const ui: Ui = useMemo(
+    () => ({
+      ws,
+      now,
+      view,
+      go,
+      open: (id, tab = "why", paste) => {
+        setModal(null);
+        setDrawer({ id, tab, paste });
+      },
+      mail: (id) => setModal({ kind: "mail", id }),
+      move: (ids, o) => setModal({ kind: "move", ids, spot: o?.spot, target: o?.target }),
+      review: (b: ReviewBucket) => setModal({ kind: "review", b }),
+      modal: (m) => setModal(m),
+      toast: showToast,
+      chat: (q) => {
+        setChatOpen(true);
+        if (q) setSeed({ text: q, n: ++seedN.current });
+      },
+      nav,
+      setNav,
+    }),
+    [ws, now, view, go, showToast, nav, setNav],
+  );
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (modal) setModal(null);
+      else if (drawer) setDrawer(null);
+      else if (chatOpen) setChatOpen(false);
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [modal, drawer, chatOpen]);
+
+  if (!result || !input) return <div className="pdapp"><Landing onFile={ws.uploadFile} onSample={ws.loadSample} loading={ws.loading} error={ws.error} dark={theme.dark} onTheme={theme.toggle} /></div>;
+
+  const t = TITLES[view];
+  const badge = (v: View) => (v === "today" ? active(rows).filter((r) => r.ui === "adv" || r.ui === "redir").length + desk.replies.length : v === "pipeline" ? active(rows).length : v === "expansion" ? ws.expList.length : v === "onboarding" ? Object.keys(desk.onb).length : null);
+  const body = { overview: <OverviewView />, today: <TodayView />, pipeline: <PipelineView />, map: <MapView />, expansion: <ExpansionView />, onboarding: <OnboardingView />, settings: <SettingsView /> }[view];
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-2.5">
-          <button onClick={() => (result ? setTab("decisions") : null)} className="flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white">
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 20V10l8-6 8 6v10M9 20v-6h6v6" /></svg>
-            </span>
-            <span className="text-left leading-tight">
-              <span className="block font-semibold">PartnerPath</span>
-              <span className="block text-[11px] text-slate-500">Franchise partner engine</span>
-            </span>
-          </button>
-          {result && (
-            <nav className="ml-2 hidden gap-1 md:flex">
-              {(["decisions", "territories", "rulebook", "audit"] as Tab[]).map((t) => (
-                <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-3 py-1.5 text-sm font-medium capitalize ${tab === t ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
-                  {t === "audit" ? `Audit log (${state.audit.length})` : t}
-                </button>
-              ))}
-            </nav>
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            {result && input && (
-              <>
-                <span className="hidden max-w-[14rem] truncate text-xs text-slate-500 lg:inline" title={state.fileName}>
-                  {state.fileName}
-                  {state.runId ? " · saved" : ""}
-                </span>
-                <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => e.target.files?.[0] && ws.uploadFile(e.target.files[0])} />
-                <button onClick={() => fileRef.current?.click()} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                  Upload new file
-                </button>
-                <button onClick={() => exportWorkbook(result, input, state.audit, state.fileName)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                  Export
-                </button>
-                <button onClick={() => setChatOpen((v) => !v)} className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white lg:hidden">
-                  Ask / update
-                </button>
-              </>
-            )}
-            {!result && (
-              <button onClick={() => setRuleId("owner-decides")} className="text-sm text-slate-500 hover:text-slate-800">
-                How it decides
+    <UiCtx.Provider value={ui}>
+      <div className="pdapp">
+        <aside className="side">
+          <div className="brand"><Logo />Pin Drop</div>
+          {NAV.map(([v, ic, l]) => {
+            const b = badge(v);
+            return (
+              <button key={v} className={`nav${view === v ? " on" : ""}`} onClick={() => go(v)}>
+                <Ic n={ic} />
+                <span>{l}</span>
+                {b !== null && <span className="badge">{b}</span>}
               </button>
-            )}
+            );
+          })}
+          <div className="grow" />
+          <div className="filecard">
+            <b style={{ wordBreak: "break-all" }}>{ws.state.fileName}</b>
+            <div className="muted">{input.applications.length} applications · {input.territories.length} territories</div>
+            <div className="row" style={{ marginTop: 6 }}>
+              <span className="dot" data-s="adv" />
+              <span className="muted">Read OK{result.health.warnings.length ? ` · ${result.health.warnings.length} note${result.health.warnings.length > 1 ? "s" : ""}` : ""}</span>
+            </div>
+            <div className="row wrap" style={{ marginTop: 8, gap: 6 }}>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && ws.uploadFile(e.target.files[0])} />
+              <button className="btn sm" onClick={() => fileRef.current?.click()}><Ic n="upload" />New file</button>
+              <button className="btn sm ghost" onClick={ws.reset}>Start over</button>
+            </div>
           </div>
-        </div>
-        {result && (
-          <nav className="flex gap-1 overflow-x-auto border-t border-slate-100 px-4 py-1.5 md:hidden">
-            {(["decisions", "territories", "rulebook", "audit"] as Tab[]).map((t) => (
-              <button key={t} onClick={() => setTab(t)} className={`shrink-0 rounded-lg px-3 py-1 text-sm capitalize ${tab === t ? "bg-slate-900 text-white" : "text-slate-600"}`}>
-                {t}
-              </button>
-            ))}
-          </nav>
-        )}
-      </header>
+        </aside>
 
-      {!result || !input ? (
-        <Landing onFile={ws.uploadFile} onSample={ws.loadSample} loading={ws.loading} error={ws.error} />
-      ) : (
-        <div className="mx-auto flex w-full max-w-[1500px] flex-1 gap-4 px-4 py-4">
-          <main className="min-w-0 flex-1 space-y-4">
-            {ws.error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ws.error}</p>}
-            {tab === "decisions" && (
-              <>
-                <WeightsPanel config={result.config} onChange={(c, l) => ws.setConfig(c, l, "weights")} />
-                <DecisionsTab result={result} input={input} onOpen={setOpenId} />
-              </>
-            )}
-            {tab === "territories" && <TerritoriesTab result={result} onOpen={setOpenId} />}
-            {tab === "rulebook" && <RulebookTab config={result.config} onConfig={(c, l) => ws.setConfig(c, l)} focus={ruleId} />}
-            {tab === "audit" && <AuditTab audit={state.audit} onOpen={setOpenId} runId={state.runId} />}
-            <p className="pb-6 text-center text-xs text-slate-400">
-              Recommendations only — the expansion owner confirms or overrides every decision. ·{" "}
-              <button onClick={ws.reset} className="underline hover:text-slate-600">
-                Start over
-              </button>
-            </p>
-          </main>
-          <aside className={`${chatOpen ? "fixed inset-x-0 bottom-0 z-40 h-[75vh] rounded-t-2xl shadow-2xl" : "hidden"} border border-slate-200 bg-slate-50 lg:sticky lg:top-[4.5rem] lg:block lg:h-[calc(100vh-5.5rem)] lg:w-[360px] lg:shrink-0 lg:rounded-xl lg:shadow-none`}>
-            {chatOpen && (
-              <button onClick={() => setChatOpen(false)} className="absolute right-3 top-3 z-10 rounded-md p-1 text-slate-400 hover:bg-slate-200 lg:hidden" aria-label="Close chat">
-                <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4l8 8M12 4l-8 8" /></svg>
-              </button>
-            )}
-            <ChatPanel ws={ws} onOpen={(id) => setOpenId(id)} injected={inject} />
-          </aside>
-        </div>
-      )}
-
-      {/* change toast */}
-      {ws.lastChanges && ws.lastChanges.changes.length > 0 && (
-        <div className="fixed bottom-4 left-4 z-50 w-[min(26rem,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
-          <div className="flex items-start justify-between gap-2">
-            <div className="text-sm font-medium text-slate-900">{ws.lastChanges.changes.length} recommendation{ws.lastChanges.changes.length > 1 ? "s" : ""} changed</div>
-            <button onClick={ws.clearLastChanges} className="text-slate-400 hover:text-slate-700" aria-label="Dismiss">
-              ×
+        <div className="main">
+          <div className="top">
+            <div>
+              <div className="crumb">{t[1]}</div>
+              <h1>{t[0]}</h1>
+            </div>
+            <span className="sp" />
+            <button className="pill" title="How people competing for the same slot are ranked" onClick={() => go("settings", { settings: "phase" })}><Ic n="sliders" />Ranking: {result.config.phaseName}<Ic n="chev" /></button>
+            <button className="btn round" aria-label="Switch light and dark theme" onClick={theme.toggle}><Ic n={theme.dark ? "sun" : "moon"} /></button>
+            <button className="btn" title="Decisions, territories, onboarding, expansion list and history as one Excel file" onClick={() => { exportWorkbook(result, input, ws.state.audit, ws.state.fileName, rows, desk, ws.expList); showToast("Excel downloaded: decisions, territories, onboarding, expansion list, history"); }}>
+              <Ic n="down" />
+              <span className="exp-l">Download Excel</span>
             </button>
           </div>
-          <div className="text-xs text-slate-500">{ws.lastChanges.label}</div>
-          <ChangeList changes={ws.lastChanges.changes} onOpen={setOpenId} max={5} />
-        </div>
-      )}
-
-      {openApp && result && input && (
-        <DetailDrawer
-          d={result.decisions[openApp]}
-          app={input.applications.find((a) => a.id === openApp)!}
-          result={result}
-          onClose={() => setOpenId(null)}
-          onRule={(id) => setRuleId(id)}
-          onOwner={(a) => ws.ownerAction(a)}
-          onClearOwner={ws.clearOwner}
-          onAsk={(q) => {
-            setOpenId(null);
-            setChatOpen(true);
-            setInject({ text: q, n: Date.now() });
-          }}
-        />
-      )}
-
-      <Modal open={!!rule && tab !== "rulebook"} onClose={() => setRuleId(null)} title={rule?.title} wide>
-        {rule && (
-          <div className="space-y-3 text-sm">
-            <p className="text-slate-700">
-              <b>Rule. </b>
-              {rule.rule}
-            </p>
-            <p className="text-slate-600">
-              <b>Why (first principles). </b>
-              {rule.why}
-            </p>
-            {rule.assumption && (
-              <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-900">
-                <b>Assumption &amp; how we&apos;d check it. </b>
-                {rule.assumption}
-              </p>
-            )}
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">What real operators do</div>
-            <EvidenceList ids={rule.evidence} />
+          <div className="content" ref={content}>
+            {ws.error && <p className="tag warn" style={{ whiteSpace: "normal", marginBottom: 12 }}>{ws.error}</p>}
+            {body}
+            <p className="muted" style={{ textAlign: "center", fontSize: 12, marginTop: 24 }}>Recommendations only. You confirm or move every decision.</p>
           </div>
-        )}
-      </Modal>
-    </div>
+        </div>
+
+        <nav className="tabbar" aria-label="Main">
+          {([["overview", "bar", "Overview"], ["today", "today", "Today"], ["pipeline", "list", "Pipeline"], ["onboarding", "clip", "Onboarding"]] as [View, string, string][]).map(([v, ic, l]) => (
+            <button key={v} className={view === v ? "on" : ""} onClick={() => go(v)}><Ic n={ic} />{l}</button>
+          ))}
+          <button className={["map", "expansion", "settings"].includes(view) ? "on" : ""} onClick={() => setModal({ kind: "more" })}><Ic n="more" />More</button>
+        </nav>
+
+        {!chatOpen && <button className="fab" onClick={() => setChatOpen(true)}><Ic n="spark" />Ask</button>}
+
+        <div>
+          {(drawer || modal) && <div className="scrim still" onClick={closeAll} />}
+          {drawer && <Drawer id={drawer.id} tab={drawer.tab} paste={drawer.paste} setTab={(tab) => setDrawer({ ...drawer, tab })} onClose={() => setDrawer(null)} />}
+          {modal && <ModalHost modal={modal} onClose={() => setModal(null)} />}
+          {chatOpen && <ChatPanel seed={seed} onClose={() => setChatOpen(false)} />}
+          {toast && (
+            <div className="toast" role="status">
+              <Ic n="check" />
+              {toast.text}
+              {toast.act && <button className="btn sm" style={{ marginLeft: 6 }} onClick={() => { toast.act!.run(); setToastState(null); }}>{toast.act.label}</button>}
+            </div>
+          )}
+        </div>
+      </div>
+    </UiCtx.Provider>
   );
 }

@@ -371,6 +371,12 @@ export function buildInput(sheets: Record<string, SheetRows>): EngineInput {
   const applications = appRows ? readApplications(appRows, health) : [];
   const territories = terRows ? readTerritories(terRows, health) : [];
   const stores = readStores(storeRows, health);
+  const owner = new Map<string, string>();
+  for (const t of territories) for (const pin of t.pins) {
+    const o = owner.get(pin);
+    if (o && o !== t.id) health.warnings.push(`Pin ${pin} is listed in both ${o} and ${t.id}. The first listed territory is used.`);
+    else owner.set(pin, t.id);
+  }
   health.applicationsRead = applications.length;
   health.territoriesRead = territories.length;
   return { applications, territories, stores, health };

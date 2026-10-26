@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { parseMessage, statusFromWord } from "@/lib/engine/nlu";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Ic } from "./Icon";
+import { ChangeList, useUi } from "./kit";
+import { deskAnswer } from "@/lib/desk/answer";
+import { parseMessage } from "@/lib/engine/nlu";
 import { FIELD_LABEL, UPDATE_FIELDS, type Update, type UpdateField } from "@/lib/engine/updates";
-import type { Change, EngineInput, EngineResult, Status } from "@/lib/engine/types";
-import { ChangeList } from "./OtherTabs";
-import { STATUS_META, StatusChip } from "./ui";
-import type { Workspace } from "./useWorkspace";
+import type { Change, EngineInput, EngineResult } from "@/lib/engine/types";
+import { UI_META, type UiStatus } from "@/lib/desk/types";
 
 interface Msg {
   id: number;
@@ -16,96 +17,105 @@ interface Msg {
   model?: string;
   applied?: { appId: string; field: string; before: string; after: string; ok: boolean; error?: string }[];
   changes?: Change[];
-  focus?: { id: string; status: Status; headline: string }[];
+  focus?: string[];
   undoable?: boolean;
 }
 
 let seq = 1;
 
+/** What we send to the AI. For big files it gets totals plus full records only for the applicants named. */
 function buildContext(result: EngineResult, input: EngineInput, focusIds: string[]) {
   const apps = Object.fromEntries(input.applications.map((a) => [a.id, a]));
   const full = new Set(focusIds);
-  const many = result.order.length > 60;
-  const records = result.order.map((id) => {
+  const many = result.order.length > 40;
+  const fullRec = (id: string) => {
     const d = result.decisions[id];
     const a = apps[id];
-    const base = { id, name: a.name, city: a.city ?? a.cityRaw, pin: a.pin ?? a.pinRaw, status: d.status, headline: d.headline, score: d.score?.total, slot: d.allocation ? `${d.allocation.territoryId}/${d.allocation.pin}` : null, territory: d.territoryId };
-    if (many && !full.has(id)) return base;
     return {
-      ...base,
+      id, name: a.name, city: a.city ?? a.cityRaw, pin: a.pin ?? a.pinRaw, status: d.status, headline: d.headline, score: d.score?.total, slot: d.allocation ? `${d.allocation.territoryId}/${d.allocation.pin}` : null,
       explanation: d.explanation,
       nextSteps: d.nextSteps.slice(0, 4),
       issues: d.issues.filter((i) => i.severity !== "info").map((i) => i.message),
       facts: { investmentLakh: a.investment, extraLakh: a.extra.extraCapital, requiredLakh: d.requiredCapital, experienceYrs: a.experience, space: a.space, sqft: a.sizeSqft, floor: a.floor, targetMonths: a.targetMonths, languages: a.languages, business: a.business, notes: a.notes },
       competition: d.competition,
-      plannedOpen: d.plan?.plannedOpen,
-      mentorStore: d.plan?.training.mentorStore.id,
-      paybackMonths: d.plan?.payback?.months,
     };
-  });
-  const territories = result.territories.map((t) => ({ id: t.territory.id, city: t.territory.city, priority: t.territory.priority, tier: t.territory.tier, realCapacity: t.capacity, sheetSlots: t.territory.slots, freePins: t.freePins, storePins: t.blockedPins, allocated: t.allocated }));
-  return JSON.stringify({ weights: result.config.weights, phase: result.config.phaseName, minCapitalLakh: result.config.minCapital, applications: records, territories });
+  };
+  const records = many ? [...full].filter((id) => apps[id]).slice(0, 12).map(fullRec) : result.order.map(fullRec);
+  const counts: Record<string, number> = {};
+  for (const id of result.order) counts[result.decisions[id].status] = (counts[result.decisions[id].status] ?? 0) + 1;
+  const territories = result.territories.map((t) => ({ id: t.territory.id, city: t.territory.city, priority: t.territory.priority, realCapacity: t.capacity, allocated: t.allocated.map((a) => `${a.appId}:${a.pin}`), freePins: t.freePins }));
+  return JSON.stringify({ totals: { applications: result.order.length, byStatus: counts }, weights: result.config.weights, phase: result.config.phaseName, minCapitalLakh: result.config.minCapital, applications: records, territories });
 }
 
-export function ChatPanel({ ws, onOpen, injected }: { ws: Workspace; onOpen: (id: string) => void; injected: { text: string; n: number } | null }) {
-  const { result, input } = ws;
+function Rich({ text }: { text: string }): ReactNode {
+  const ui = useUi();
+  return (
+    <>
+      {text.split("\n\n").map((para, i) => (
+        <p key={i} style={{ whiteSpace: "pre-line" }}>
+          {para.split(/(\*\*[^*]+\*\*|APP-\d{3}(?:-R\d+)?)/g).map((seg, k) =>
+            seg.startsWith("**") ? <b key={k}>{seg.slice(2, -2)}</b> : /^APP-\d{3}/.test(seg) && ui.ws.rows.some((r) => r.id === seg) ? <button key={k} className="lnk" onClick={() => ui.open(seg)}>{seg}</button> : <span key={k}>{seg}</span>,
+          )}
+        </p>
+      ))}
+    </>
+  );
+}
+
+export function ChatPanel({ seed, onClose }: { seed: { text: string; n: number } | null; onClose: () => void }) {
+  const ui = useUi();
+  const { ws, now } = ui;
+  const { result, input, rows, desk } = ws;
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const done = useRef<number | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs, busy]);
   useEffect(() => {
-    if (injected) send(injected.text);
+    if (seed && done.current !== seed.n) {
+      done.current = seed.n;
+      void send(seed.text);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [injected?.n]);
+  }, [seed?.n]);
 
   const suggestions = useMemo(() => {
-    if (!result) return [];
-    const s: string[] = [];
-    const byStatus = (st: Status) => result.order.filter((id) => result.decisions[id].status === st);
-    const hasCode = (code: string) => result.order.find((id) => result.decisions[id].issues.some((i) => i.code === code && i.severity === "block"));
-    const hold = byStatus("HOLD")[0];
-    if (hold) s.push(`Why is ${hold} on hold?`);
-    const upper = hasCode("FLOOR_UPPER");
-    if (upper) s.push(`${upper} has now found a ground-floor space`);
-    const fin = hasCode("FINANCING_PROBABLE");
-    if (fin) s.push(`${fin} can add 4 lakh more from family savings`);
-    const wl = byStatus("WAITLIST")[0];
-    if (wl) s.push(`Why is ${wl} waitlisted?`);
-    const adv = byStatus("ADVANCE")[0];
-    if (adv) s.push(`How will ${adv} be trained?`);
-    s.push("Who is on hold and what do they need?");
-    return s.slice(0, 6);
-  }, [result]);
-
+    const s = ["Top 5", "What is the bottleneck?"];
+    const info = rows.find((r) => r.ui === "info");
+    if (info) s.unshift(`Why is ${info.id} on hold?`);
+    const wait = rows.find((r) => r.ui === "wait");
+    const adv = rows.find((r) => r.ui === "adv");
+    if (wait && adv) s.push(`Compare ${adv.id} and ${wait.id}`);
+    s.push("How many in Bengaluru?");
+    return s.slice(0, 5);
+  }, [rows]);
   const names = useMemo(() => Object.fromEntries((input?.applications ?? []).map((a) => [a.id, a.name])), [input]);
 
-  function engineAnswer(ids: string[]): Msg {
-    const r = result!;
+  const bot = (m: Omit<Msg, "id" | "role">) => setMsgs((all) => [...all, { id: seq++, role: "bot", ...m }]);
+
+  function engineAnswer(ids: string[], source: Msg["source"] = "engine") {
     const parts = ids.map((id) => {
-      const d = r.decisions[id];
-      return `**${id} — ${STATUS_META[d.status].label}.** ${d.explanation}${d.nextSteps.length ? `\nNext: ${d.nextSteps.slice(0, 2).join(" · ")}` : ""}`;
+      const r = rows.find((x) => x.id === id);
+      const d = result!.decisions[id];
+      return `**${id} — ${r ? UI_META[r.ui].label : ""}.** ${d.explanation}${d.nextSteps.length ? `\nNext: ${d.nextSteps.slice(0, 2).join(" · ")}` : ""}`;
     });
-    return { id: seq++, role: "bot", text: parts.join("\n\n"), source: "engine", focus: ids.map((id) => ({ id, status: r.decisions[id].status, headline: r.decisions[id].headline })) };
+    bot({ text: parts.join("\n\n"), source, focus: ids });
   }
 
-  function applyAndReport(updates: Update[], source: Msg["source"], model?: string): Msg {
+  function applyAndReport(updates: Update[], source: Msg["source"], model?: string) {
     const { changes, after } = ws.addUpdates(updates, `Update from chat: ${updates.map((u) => `${u.appId} ${FIELD_LABEL[u.field]} = ${u.value}`).join("; ")}`);
     const applied = after ? after.applied.slice(-updates.length) : [];
     const ids = [...new Set(updates.map((u) => u.appId))];
-    const focus = after ? ids.filter((id) => after.result.decisions[id]).map((id) => ({ id, status: after.result.decisions[id].status, headline: after.result.decisions[id].headline })) : [];
     const moved = changes.filter((c) => !ids.includes(c.id));
     const main = changes.filter((c) => ids.includes(c.id));
-    let summary = main.length ? `Re-ran every check. ${main.map((c) => `${c.id}: ${c.from && STATUS_META[c.from].label} → ${c.to && STATUS_META[c.to].label}${c.toAlloc && c.toAlloc !== c.fromAlloc ? ` (${c.toAlloc})` : ""}`).join("; ")}.` : "Re-ran every check — the recommendation did not change.";
+    let summary = main.length ? `Re-ran every check. ${main.map((c) => `${c.id}: ${c.from ?? ""} → ${c.to ?? ""}${c.toAlloc && c.toAlloc !== c.fromAlloc ? ` (${c.toAlloc})` : ""}`).join("; ")}.` : "Re-ran every check. The recommendation did not change.";
     if (moved.length) summary += ` Knock-on effect on ${moved.length} other applicant${moved.length > 1 ? "s" : ""}.`;
-    if (after) for (const id of ids) {
-      const d = after.result.decisions[id];
-      if (d) summary += `\n\n**${id} now:** ${d.explanation}`;
-    }
-    return { id: seq++, role: "bot", text: summary, source, model, applied, changes, focus, undoable: true };
+    if (after) for (const id of ids) if (after.result.decisions[id]) summary += `\n\n**${id} now:** ${after.result.decisions[id].explanation}`;
+    bot({ text: summary, source, model, applied, changes, focus: ids, undoable: true });
   }
 
   async function send(raw: string) {
@@ -116,16 +126,10 @@ export function ChatPanel({ ws, onOpen, injected }: { ws: Workspace; onOpen: (id
     const known = result.order;
     const p = parseMessage(t, known, names);
 
-    if (p.confident && p.kind === "update") return setMsgs((m) => [...m, applyAndReport(p.updates, "engine")]);
-    if (p.confident && p.kind === "explain") return setMsgs((m) => [...m, engineAnswer(p.appIds)]);
-    if (p.confident && p.kind === "list" && p.filter?.status) {
-      const st = statusFromWord(p.filter.status);
-      if (st) {
-        const ids = result.order.filter((id) => result.decisions[id].status === st);
-        const body = ids.length ? ids.map((id) => `• ${id} ${names[id] ?? ""} — ${result.decisions[id].headline}`).join("\n") : "None.";
-        return setMsgs((m) => [...m, { id: seq++, role: "bot", text: `${ids.length} applicant${ids.length === 1 ? "" : "s"} on ${STATUS_META[st].label}:\n${body}`, source: "engine" }]);
-      }
-    }
+    if (p.confident && p.kind === "update") return applyAndReport(p.updates, "engine");
+    const quick = deskAnswer(t, rows, desk, p.appIds.length ? p.appIds : [], now);
+    if (quick) return bot({ text: quick.text, source: "engine", focus: quick.ids });
+    if (p.confident && p.kind === "explain") return engineAnswer(p.appIds);
 
     setBusy(true);
     try {
@@ -136,123 +140,72 @@ export function ChatPanel({ ws, onOpen, injected }: { ws: Workspace; onOpen: (id
       const ups: Update[] = (j.updates ?? [])
         .filter((u: { appId: string; field: string }) => known.includes(u.appId) && UPDATE_FIELDS.includes(u.field as UpdateField))
         .map((u: { appId: string; field: UpdateField; value: string }) => ({ appId: u.appId, field: u.field, value: u.value, source: "ai" as const, text: t }));
-      if (j.intent === "update" && ups.length) setMsgs((m) => [...m, applyAndReport(ups, "ai", j.model)]);
-      else {
-        const ids: string[] = (j.appIds ?? []).filter((id: string) => known.includes(id));
-        setMsgs((m) => [...m, { id: seq++, role: "bot", text: j.answer || "I couldn't find that in the records.", source: "ai", model: j.model, focus: ids.slice(0, 6).map((id) => ({ id, status: result.decisions[id].status, headline: result.decisions[id].headline })) }]);
-      }
+      if (j.intent === "update" && ups.length) applyAndReport(ups, "ai", j.model);
+      else bot({ text: j.answer || "I couldn't find that in the records.", source: "ai", model: j.model, focus: (j.appIds ?? []).filter((id: string) => known.includes(id)).slice(0, 6) });
     } catch {
-      const st = p.filter?.status ? statusFromWord(p.filter.status) : null;
-      if (st) {
-        const ids = result.order.filter((id) => result.decisions[id].status === st);
-        setMsgs((m) => [...m, { id: seq++, role: "bot", source: "fallback", text: ids.length ? ids.map((id) => `• ${id} ${names[id] ?? ""} — ${result.decisions[id].headline} ${result.decisions[id].nextSteps[0] ?? ""}`).join("\n") : "None." }]);
-      } else if (p.appIds.length) setMsgs((m) => [...m, { ...engineAnswer(p.appIds), source: "fallback" }]);
-      else
-        setMsgs((m) => [
-          ...m,
-          { id: seq++, role: "bot", source: "fallback", text: "The AI helper is busy right now, so I can only answer questions that name an application. Try “Why is APP-007 on hold?”, or give new information such as “APP-012 has found a ground-floor space”." },
-        ]);
+      if (p.appIds.length) engineAnswer(p.appIds, "fallback");
+      else bot({ source: "fallback", text: "The AI helper is busy, so I can answer these without it: “Why is APP-007 on hold?”, “How many in Bengaluru?”, “Top 5”, “Who is on the waitlist?”, “Compare APP-001 and APP-002”, “What is the bottleneck?”. You can also give new facts, like “APP-012 has found a ground-floor space”." });
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <div className="text-sm font-semibold text-slate-900">Ask or update</div>
-        <div className="text-xs text-slate-500">Ask why, or tell it something new. It re-checks everyone and shows what changed.</div>
+    <section className="chat" aria-label="Ask Pin Drop">
+      <div className="row" style={{ padding: "12px 14px", borderBottom: "1px solid var(--line)" }}>
+        <span className="bucket"><span className="ic" style={{ width: 30, height: 30, fontSize: 15, color: "var(--accent)", background: "color-mix(in srgb,var(--accent) 14%,var(--surface))" }}><Ic n="spark" /></span></span>
+        <b style={{ flex: 1 }}>Ask Pin Drop</b>
+        <span className="tag">Answers from the records</span>
+        <button className="btn ghost sm round" aria-label="Close" onClick={onClose}><Ic n="x" /></button>
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
+      <div className="msgs">
         {msgs.length === 0 && (
-          <div className="space-y-2">
-            <div className="text-xs font-medium text-slate-500">Try:</div>
-            {suggestions.map((s) => (
-              <button key={s} onClick={() => send(s)} className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/50">
-                {s}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="muted">Ask about any applicant, a city or a status. Or tell it something new and it re-checks everyone.</div>
+            <div className="row wrap" style={{ gap: 6 }}>
+              {suggestions.map((s) => <button key={s} className="fchip" onClick={() => void send(s)}>{s}</button>)}
+            </div>
+          </>
         )}
         {msgs.map((m) =>
           m.role === "user" ? (
-            <div key={m.id} className="ml-8 rounded-2xl rounded-br-sm bg-indigo-600 px-3 py-2 text-sm text-white">
-              {m.text}
-            </div>
+            <div key={m.id} className="bub me">{m.text}</div>
           ) : (
-            <div key={m.id} className="mr-2 rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700">
+            <div key={m.id} className="bub">
               {m.applied && m.applied.length > 0 && (
-                <div className="mb-2 space-y-1 rounded-lg bg-slate-50 p-2 text-xs">
+                <div className="stack" style={{ gap: 4, marginBottom: 8, fontSize: 12.5 }}>
                   {m.applied.map((a, i) => (
-                    <div key={i} className={a.ok ? "text-slate-700" : "text-rose-700"}>
-                      <span className="font-mono">{a.appId}</span> · {FIELD_LABEL[a.field as UpdateField] ?? a.field}: {a.ok ? (
-                        <>
-                          <s className="text-slate-400">{a.before}</s> → <b>{a.after}</b>
-                        </>
-                      ) : (
-                        `not applied (${a.error})`
-                      )}
-                    </div>
+                    <div key={i}><span className="mono">{a.appId}</span> · {FIELD_LABEL[a.field as UpdateField] ?? a.field}: {a.ok ? <><s className="muted">{a.before}</s> → <b>{a.after}</b></> : `not applied (${a.error})`}</div>
                   ))}
                 </div>
               )}
               <Rich text={m.text} />
-              {m.changes && m.changes.length > 0 && (
-                <div className="mt-2 border-t border-slate-100 pt-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">What changed</div>
-                  <ChangeList changes={m.changes} onOpen={onOpen} />
-                </div>
-              )}
+              {m.changes && m.changes.length > 0 && (<><div className="eyebrow" style={{ marginTop: 8 }}>What changed</div><ChangeList changes={m.changes} onOpen={(id) => ui.open(id)} /></>)}
               {m.focus && m.focus.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {m.focus.map((f) => (
-                    <button key={f.id} onClick={() => onOpen(f.id)} className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-xs hover:border-indigo-300">
-                      <span className="font-mono">{f.id}</span>
-                      <StatusChip status={f.status} />
-                    </button>
-                  ))}
+                <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
+                  {m.focus.slice(0, 6).map((id) => {
+                    const r = rows.find((x) => x.id === id);
+                    return r ? <button key={id} className="chip" data-s={r.ui as UiStatus} onClick={() => ui.open(id)}><span className="mono">{id}</span> {r.app.name.split(" ")[0]}</button> : null;
+                  })}
                 </div>
               )}
-              <div className="mt-2 flex items-center gap-2 text-[10px] uppercase tracking-wide text-slate-400">
-                <span>{m.source === "engine" ? "Answered from the engine record" : m.source === "ai" ? `Read by AI (${m.model ?? "Gemini"}) · grounded in engine records` : "AI busy · answered from engine record"}</span>
+              <div className="row" style={{ gap: 8, marginTop: 8, fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".05em" }}>
+                <span>{m.source === "engine" ? "From the records" : m.source === "ai" ? `Read by AI (${m.model ?? "Gemini"}), grounded in records` : "AI busy · from the records"}</span>
                 {m.undoable && m === [...msgs].reverse().find((x) => x.undoable) && ws.state.updates.length > 0 && (
-                  <button onClick={() => { ws.undoLastUpdate(); setMsgs((all) => [...all, { id: seq++, role: "bot", text: "Undone — the update was removed and every recommendation recalculated.", source: "engine" }]); }} className="ml-auto rounded px-1.5 py-0.5 normal-case tracking-normal text-indigo-600 hover:bg-indigo-50">
-                    Undo
-                  </button>
+                  <button className="btn sm ghost" style={{ marginLeft: "auto" }} onClick={() => { ws.undoLastUpdate(); bot({ text: "Undone. The update was removed and every recommendation recalculated.", source: "engine" }); }}><Ic n="undo" />Undo</button>
                 )}
               </div>
             </div>
           ),
         )}
-        {busy && <div className="mr-2 animate-pulse rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-400">Reading your message…</div>}
+        {busy && <div className="bub muted">Reading your message…</div>}
         <div ref={endRef} />
       </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          send(text);
-        }}
-        className="border-t border-slate-200 p-3"
-      >
-        <div className="flex gap-2">
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="e.g. Why is APP-007 on hold?" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
-          <button disabled={busy || !text.trim()} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-40">
-            Send
-          </button>
-        </div>
+      <form onSubmit={(e) => { e.preventDefault(); void send(text); }}>
+        <input placeholder="e.g. Why is APP-007 on hold?" autoComplete="off" value={text} onChange={(e) => setText(e.target.value)} />
+        <button className="btn primary round" aria-label="Send" disabled={busy || !text.trim()}><Ic n="send" /></button>
       </form>
-    </div>
+    </section>
   );
 }
 
-function Rich({ text }: { text: string }) {
-  return (
-    <div className="space-y-1.5 whitespace-pre-wrap leading-relaxed">
-      {text.split("\n\n").map((para, i) => (
-        <p key={i}>
-          {para.split(/(\*\*[^*]+\*\*)/g).map((seg, k) => (seg.startsWith("**") ? <b key={k} className="text-slate-900">{seg.slice(2, -2)}</b> : <span key={k}>{seg}</span>))}
-        </p>
-      ))}
-    </div>
-  );
-}

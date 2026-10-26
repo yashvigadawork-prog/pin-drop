@@ -110,6 +110,8 @@ export interface Signal {
   kind:
     | "owner_not_operator"
     | "funding_conditional"
+    | "competitor_franchise"
+    | "legal_issue"
     | "relevant_retail"
     | "adjacent_retail"
     | "multi_unit_operator"
