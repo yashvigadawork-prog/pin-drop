@@ -429,3 +429,20 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .tier[data-t="B"] { background: color-mix(in srgb, var(--s-redir) 22%, var(--surface)); color: var(--ink); border: 1px solid color-mix(in srgb, var(--s-redir) 55%, var(--line)); }
 .tier[data-t="C"] { background: var(--surface2); color: var(--muted); border: 1px solid var(--line); }
 .tag .tier { margin-right: 4px; }
+
+/* funnel, second version */
+.funnel { display: flex; flex-direction: column; gap: 3px; }
+.fstep { display: grid; grid-template-columns: 176px minmax(0, 1fr) 54px; align-items: center; gap: 10px; height: 36px; animation: rise .5s cubic-bezier(.3,.7,.2,1) both; animation-delay: calc(var(--i, 0) * 90ms); }
+.flabel { font-size: 12.5px; display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flabel i { font-style: normal; flex: none; width: 18px; height: 18px; border-radius: 99px; display: inline-grid; place-items: center; font-size: 10.5px; font-weight: 700; font-family: var(--f-mono); color: var(--muted); border: 1px solid var(--line); background: var(--surface2); }
+.farea { position: relative; z-index: 1; height: 36px; display: block; }
+.fsvg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; transform-origin: center; animation: fgrow .7s cubic-bezier(.3,.7,.2,1) both; animation-delay: calc(var(--i, 0) * 90ms + 120ms); }
+.fsvg path { fill: var(--fc); stroke: rgba(255,255,255,.28); stroke-width: 1px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.fnum { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; font-family: var(--f-mono); font-size: 13px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.fnum.dark { color: #0b1220; text-shadow: none; }
+.fpc { justify-self: end; font-family: var(--f-mono); font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 99px; min-width: 44px; text-align: center; }
+.fpc:empty { display: none; }
+.fpc.good { color: var(--s-adv); background: color-mix(in srgb, var(--s-adv) 14%, var(--surface)); }
+.fpc.mid { color: var(--s-wait); background: color-mix(in srgb, var(--s-wait) 14%, var(--surface)); }
+.fpc.low { color: var(--s-no); background: color-mix(in srgb, var(--s-no) 14%, var(--surface)); }
+@media (max-width: 760px) { .fstep { grid-template-columns: 104px minmax(0, 1fr) 46px; gap: 6px; } .flabel { font-size: 11.5px; } .flabel i { display: none; } }

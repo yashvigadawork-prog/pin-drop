@@ -322,24 +322,42 @@ function PerfView() {
   );
 }
 
+// A real funnel: blue at the top (applied) to lime at the bottom (store open).
+// Width follows the square root of the count so the small late stages stay visible. The numbers say the rest.
 function Funnel({ steps }: { steps: [string, number][] }) {
+  const N = steps.length;
   const top = Math.max(1, steps[0]?.[1] ?? 1);
+  const wOf = (n: number) => (n <= 0 ? 12 : 16 + 84 * Math.sqrt(n / top));
+  const drops = steps.map((s, i) => (i ? steps[i - 1][1] - s[1] : 0));
+  const worst = drops.reduce((b, d, i) => (d > drops[b] ? i : b), 0);
+  const last = steps[N - 1]?.[1] ?? 0;
   return (
     <div className="funnel">
+      <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
+        <span className="tag"><Ic n="users" />{steps[0]?.[1]} applied</span>
+        <span className="tag"><Ic n="build" />{last} open</span>
+        {worst > 0 && drops[worst] > 0 && <span className="tag warn"><Ic n="alert" />Biggest drop: {steps[worst - 1][0]} → {steps[worst][0]}, {drops[worst]} fewer</span>}
+      </div>
       {steps.map(([label, n], i) => {
-        const w = Math.max(10, (n / top) * 100);
-        const next = i < steps.length - 1 ? Math.max(8, (steps[i + 1][1] / top) * 100) : w * 0.82;
-        const inset = Math.max(0, ((w - Math.min(w, next)) / 2 / w) * 100);
+        const wT = wOf(n);
+        const wB = i < N - 1 ? wOf(steps[i + 1][1]) : wT * 0.78;
+        const x0 = (100 - wT) / 2;
+        const x1 = x0 + wT;
+        const y0 = (100 - wB) / 2;
+        const y1 = y0 + wB;
         const pc = i && steps[i - 1][1] ? Math.round((n / steps[i - 1][1]) * 100) : null;
+        const t = N > 1 ? (i / (N - 1)) * 100 : 0;
+        const tone = pc === null ? "" : pc >= 75 ? "good" : pc >= 40 ? "mid" : "low";
         return (
-          <div key={label} className="fstep" style={{ "--i": i } as CSSProperties}>
-            <span className="flabel">{label}</span>
+          <div key={label} className="fstep" style={{ "--i": i, "--fc": `color-mix(in srgb, var(--accent) ${t}%, var(--s-redir))` } as CSSProperties}>
+            <span className="flabel"><i>{i + 1}</i>{label}</span>
             <span className="farea">
-              <span className="fbar" style={{ width: `${w}%`, clipPath: `polygon(0 0, 100% 0, ${100 - inset}% 100%, ${inset}% 100%)`, opacity: 1 - i * 0.06 } as CSSProperties}>
-                <b>{n}</b>
-              </span>
+              <svg className="fsvg" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+                <path d={`M${x0} 0 L${x1} 0 L${y1} 40 L${y0} 40 Z`} />
+              </svg>
+              <b className={`fnum${t > 62 ? " dark" : ""}`}>{n}</b>
             </span>
-            <span className={`fpc${pc !== null && pc < 50 ? " low" : ""}`}>{pc !== null ? `${pc}%` : ""}</span>
+            <span className={`fpc ${tone}`} title={pc !== null ? `${n} of ${steps[i - 1][1]} made it from the step before` : ""}>{pc !== null ? `${pc}%` : ""}</span>
           </div>
         );
       })}

@@ -79,7 +79,7 @@ export function funnel(rows: Row[], desk: Desk): [string, number][] {
     ["Applications in", rows.length],
     ["Decided", rows.length],
     ["Accepted", c.adv + c.redir],
-    ["Emailed, in onboarding", onb.length],
+    ["In onboarding", onb.length],
     ["Documents in", ge(2)],
     ["Checks clear", ge(3)],
     ["Site and call done", ge(5)],
