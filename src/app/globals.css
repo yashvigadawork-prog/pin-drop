@@ -130,9 +130,9 @@ svg.i { width: 1em; height: 1em; flex: none; stroke: currentColor; fill: none; s
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
 
 /* rings, bars */
-.ring { position: relative; display: inline-grid; place-items: center; flex: none; }
-.ring svg { transform: rotate(-90deg); }
-.ring .v { position: absolute; font-family: var(--f-display); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pdring { position: relative; display: inline-grid; place-items: center; flex: none; }
+.pdring svg { transform: rotate(-90deg); }
+.pdring .v { position: absolute; font-family: var(--f-display); font-weight: 700; font-variant-numeric: tabular-nums; }
 .track { fill: none; stroke: var(--line); }
 .meter { height: 8px; border-radius: 99px; background: var(--surface2); overflow: hidden; border: 1px solid var(--line); }
 .meter i { display: block; height: 100%; border-radius: 99px; background: var(--c, var(--accent)); }
@@ -322,7 +322,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
   .tbl td[data-l]::before { content: attr(data-l); display: inline-block; min-width: 76px; color: var(--muted); font-family: var(--f-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
   .tbl td[data-l=""]::before { display: none; }
   .tbl td.ck { position: absolute; right: 12px; top: 12px; width: auto; }
-  .tbl td .ring { vertical-align: middle; }
+  .tbl td .pdring { vertical-align: middle; }
   .tbl td .chip { margin-right: 4px; }
   .grid[style*="minmax(220px,300px)"] { grid-template-columns: minmax(0, 1fr) !important; }
   .card, .modal { max-width: 100%; }

@@ -15,7 +15,7 @@ export function Donut({ rows, onPick }: { rows: Row[]; onPick: (s: UiStatus) => 
   const starts = UI_ORDER.reduce<number[]>((acc, st, i) => [...acc, (acc[i - 1] ?? 0) + (i ? (C * n[UI_ORDER[i - 1]]) / Math.max(1, tot) : 0)], []);
   return (
     <div className="row" style={{ gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-      <span className="ring" style={{ width: 140, height: 140 }}>
+      <span className="pdring" style={{ width: 140, height: 140 }}>
         <svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="Where everyone stands">
           <circle className="track" cx="70" cy="70" r={R} strokeWidth="16" />
           {UI_ORDER.map((s, i) => {

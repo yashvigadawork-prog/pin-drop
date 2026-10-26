@@ -91,7 +91,7 @@ export function Ring({ v, size = 40, sw = 5, s }: { v: number; size?: number; sw
   const len = (C * Math.max(0, Math.min(100, v))) / 100;
   const h = size / 2;
   return (
-    <span className="ring" data-s={s} style={{ width: size, height: size }}>
+    <span className="pdring" data-s={s} style={{ width: size, height: size }}>
       <svg width={size} height={size} aria-hidden="true">
         <circle className="track" cx={h} cy={h} r={r} strokeWidth={sw} />
         <circle className="arc" cx={h} cy={h} r={r} fill="none" stroke={s ? "var(--c)" : "var(--accent)"} strokeWidth={sw} strokeLinecap="round" style={{ "--cc": C, strokeDasharray: `${len} ${C}` } as CSSProperties} />
