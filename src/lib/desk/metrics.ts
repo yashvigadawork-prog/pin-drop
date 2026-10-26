@@ -52,18 +52,21 @@ const CAP = new Set(["CAPITAL_SHORT", "FINANCING_PROBABLE", "INVESTMENT_MISSING"
 const SPACE = new Set(["SPACE_TOO_SMALL", "FLOOR_UPPER", "SIZE_MISSING", "FLOOR_CONTRADICTION", "SPACE_MISSING"]);
 const PIN = new Set(["PIN_INVALID", "PIN_CITY_MISMATCH", "DUPLICATE_SUBMISSION", "CITY_MISSING"]);
 
+export function reasonOf(r: Row): ReasonKey | null {
+  if (r.ui === "adv" || r.ui === "redir" || r.withdrawn || (r.moved && r.moved !== "exp")) return null;
+  if (r.ui === "exp") return "area";
+  const codes = r.d.issues.filter((i) => i.severity === "block").map((i) => i.code);
+  if (codes.some((c) => CAP.has(c))) return "capital";
+  if (codes.some((c) => SPACE.has(c))) return "space";
+  if (codes.some((c) => PIN.has(c))) return "pin";
+  return r.ui === "wait" ? "slot" : null;
+}
+
 export function reasonCounts(rows: Row[]): Record<ReasonKey, number> {
   const o: Record<ReasonKey, number> = { capital: 0, space: 0, pin: 0, slot: 0, area: 0 };
   for (const r of rows) {
-    if (r.ui === "adv" || r.ui === "redir" || r.withdrawn || (r.moved && r.moved !== "exp")) continue;
-    if (r.ui === "exp") o.area++;
-    else {
-      const codes = r.d.issues.filter((i) => i.severity === "block").map((i) => i.code);
-      if (codes.some((c) => CAP.has(c))) o.capital++;
-      else if (codes.some((c) => SPACE.has(c))) o.space++;
-      else if (codes.some((c) => PIN.has(c))) o.pin++;
-      else if (r.ui === "wait") o.slot++;
-    }
+    const k = reasonOf(r);
+    if (k) o[k]++;
   }
   return o;
 }

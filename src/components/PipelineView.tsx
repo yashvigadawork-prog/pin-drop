@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Ic } from "./Icon";
 import { Chip, Ring, Tag, useUi } from "./kit";
 import { countBy, terrOf, type Row } from "@/lib/desk/model";
+import { REASON_META, reasonOf, type ReasonKey } from "@/lib/desk/metrics";
 import { UI_GROUPS, UI_META, UI_ORDER, type UiStatus } from "@/lib/desk/types";
 import { ago } from "@/lib/desk/time";
 
@@ -24,6 +25,7 @@ export function PipelineView() {
 
   const grp = UI_GROUPS.find((g) => g.key === nav.filter);
   let list = base.filter((r) => nav.filter === "all" || (grp ? grp.members.includes(r.ui) : r.ui === nav.filter));
+  if (nav.reason) list = list.filter((r) => reasonOf(r) === nav.reason);
   if (nav.terrF) list = list.filter((r) => terrOf(result, r.app.pin) === nav.terrF || r.slotTerr === nav.terrF);
   const q = nav.q.trim().toLowerCase();
   if (q) list = list.filter((r) => `${r.id} ${r.app.name} ${r.app.city ?? r.app.cityRaw} ${r.app.pin ?? r.app.pinRaw}`.toLowerCase().includes(q));
@@ -45,9 +47,9 @@ export function PipelineView() {
         </select>
       </div>
       <div className="row wrap" style={{ gap: 6 }}>
-        <button className={`fchip${nav.filter === "all" ? " on" : ""}`} onClick={() => setNav({ filter: "all" })}>All <span className="n">{base.length}</span></button>
+        <button className={`fchip${nav.filter === "all" ? " on" : ""}`} onClick={() => setNav({ filter: "all", reason: null })}>All <span className="n">{base.length}</span></button>
         {UI_GROUPS.map((g) => (
-          <button key={g.key} className={`fchip${nav.filter === g.key ? " on" : ""}`} data-s={g.key} onClick={() => setNav({ filter: g.key })}>
+          <button key={g.key} className={`fchip${nav.filter === g.key ? " on" : ""}`} data-s={g.key} onClick={() => setNav({ filter: g.key, reason: null })}>
             <Ic n={UI_META[g.key].icon} />
             {g.label} <span className="n">{g.members.reduce((a, m) => a + n[m], 0)}</span>
           </button>
@@ -57,6 +59,12 @@ export function PipelineView() {
           <input type="checkbox" checked={nav.showMoved} onChange={(e) => setNav({ showMoved: e.target.checked })} /> Show the {moved} who moved on
         </label>
       </div>
+      {nav.reason && (
+        <div className="row" style={{ gap: 8 }}>
+          <Tag icon={REASON_META[nav.reason as ReasonKey][0]}>{REASON_META[nav.reason as ReasonKey][1]} · {list.length}</Tag>
+          <button className="btn sm ghost" onClick={() => setNav({ reason: null })}><Ic n="x" />Show everyone</button>
+        </div>
+      )}
       {nav.terrF && (
         <div className="row" style={{ gap: 8 }}>
           <Tag icon="layers">Territory {nav.terrF}</Tag>

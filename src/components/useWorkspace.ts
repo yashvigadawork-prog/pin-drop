@@ -1,5 +1,6 @@
 "use client";
 
+import { detectDocs, gmailLink, rememberAttachment, type InboundMail } from "@/lib/desk/inbox";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_CONFIG } from "@/lib/engine/config";
 import { diffResults, runEngine } from "@/lib/engine/engine";
@@ -317,6 +318,15 @@ export function useWorkspace() {
     [mutate],
   );
 
+  /** Offer a neighbouring pin to a strong applicant who lost their own. The owner confirms; nothing moves on its own. */
+  const offerPin = useCallback(
+    (id: string, territoryId: string, pin: string) => {
+      const a: OwnerAction = { appId: id, action: "confirm", allocation: { territoryId, pin, kind: "redirect" }, reason: `Offered pin ${pin}: strong enough to beat its current holder`, at: iso() };
+      mutate(`${id}: offered pin ${pin}`, "owner", (s) => ({ ...s, owner: [...s.owner.filter((o) => o.appId !== id), a] }), [{ kind: "owner", payload: { action: a } }]);
+    },
+    [mutate],
+  );
+
   /** Send emails. Next-steps emails lock the pin and move the person to Onboarding. */
   const sendMail = useCallback(
     async (items: { id: string; type: MailType; edited?: boolean; area?: string; override?: { sub: string; text: string } }[]) => {
@@ -388,6 +398,48 @@ export function useWorkspace() {
         }
         return { ...s, desk: { ...s.desk, onb: { ...s.desk.onb, [id]: { ...o, chk, stage } } } };
       }),
+    [mutate],
+  );
+  /** Set one check straight to a state (the owner clicked Verify or Flag on an emailed document). */
+  const setCheck = useCallback(
+    (id: string, key: string, nx: CheckState) =>
+      mutate(`${nx === "verified" ? "Verified" : nx === "flag" ? "Flagged" : "Updated"} a document for ${id}`, "check", (s) => {
+        const o = s.desk.onb[id];
+        if (!o) return s;
+        const chk = { ...o.chk, [key]: nx };
+        let stage = o.stage;
+        if (nx === "verified") {
+          const v = Object.values(chk).filter((x) => x === "verified").length;
+          stage = Math.max(stage, Math.min(11, Math.floor((v / ALL_CHECK_KEYS.length) * 6)));
+        }
+        return { ...s, desk: { ...s.desk, onb: { ...s.desk.onb, [id]: { ...o, chk, stage } } } };
+      }),
+    [mutate],
+  );
+  /** A partner emailed us. Find the documents in it and mark them "received, for your review". */
+  const receiveEmail = useCallback(
+    (id: string, mail: InboundMail): string[] => {
+      const open = stateRef.current.desk.onb[id]?.chk ?? {};
+      const hits = detectDocs(mail).filter((h) => open[h.key] !== "verified");
+      if (!hits.length) return [];
+      for (const h of hits) {
+        const url = mail.attachments.find((a) => a.name === h.file)?.url;
+        if (url) rememberAttachment(id, h.key, url);
+      }
+      mutate(`${id}: partner emailed ${hits.length} document${hits.length === 1 ? "" : "s"}`, "check", (s) => {
+        const o = s.desk.onb[id];
+        if (!o) return s;
+        const chk = { ...o.chk };
+        const docs = { ...(o.docs ?? {}) };
+        for (const h of hits) {
+          if (chk[h.key] === "verified") continue;
+          chk[h.key] = "received";
+          docs[h.key] = { file: h.file, from: mail.from, subject: mail.subject, at: new Date().toISOString(), link: gmailLink(mail) };
+        }
+        return { ...s, desk: { ...s.desk, onb: { ...s.desk.onb, [id]: { ...o, chk, docs } } } };
+      });
+      return hits.map((h) => h.label);
+    },
     [mutate],
   );
   const simulateReply = useCallback(
@@ -466,10 +518,13 @@ export function useWorkspace() {
     moveApplicants,
     resetMove,
     toggleLock,
+    offerPin,
     sendMail,
     remind,
     markSpot,
     cycleCheck,
+    setCheck,
+    receiveEmail,
     simulateReply,
     applyReply,
     setMod,

@@ -35,6 +35,7 @@ export interface Ctx {
 }
 
 const HARD = new Set(["CAPITAL_SHORT", "NO_TERRITORY_IN_CITY", "CITY_OUTSIDE_NETWORK"]);
+const isHard = (code: string) => HARD.has(code) || code.startsWith("CUSTOM_NOTNOW_");
 const PLACE_REDIRECT = new Set(["PIN_HAS_STORE", "PIN_OUTSIDE_TERRITORY", "TERRITORY_NO_CAPACITY"]);
 
 export function evaluate(app: Application, ctx: Ctx): Evaluation {
@@ -201,11 +202,22 @@ export function evaluate(app: Application, ctx: Ctx): Evaluation {
   if (fest && fm !== null && fm < feasible)
     add({ code: "FESTIVAL_MISS", gate: "pace", severity: "warn", message: `Wants to open before ${String(fest.value).split(" (")[0]}, which is ${fm.toFixed(1)} months away — not achievable (earliest is ${feasible} months).`, evidence: fest.quote, fix: "Plan a post-festival opening, or target the next festive season.", ruleId: "timeline" });
 
+  // ---------------- Owner-added assumptions ----------------
+  for (const cr of config.custom ?? []) {
+    const v = cr.field === "investment" ? (effectiveCapital ?? app.investment) : cr.field === "experience" ? app.experience : cr.field === "sizeSqft" ? size : app.targetMonths;
+    if (v === null || v === undefined) continue;
+    const fails = cr.op === "min" ? v < cr.value : v > cr.value;
+    if (!fails) continue;
+    const gate: Gate = cr.field === "sizeSqft" ? "premises" : cr.field === "targetMonths" ? "pace" : "partner";
+    const code = `CUSTOM_${cr.effect === "notnow" ? "NOTNOW" : cr.effect === "hold" ? "HOLD" : "FLAG"}_${cr.id}`;
+    add({ code, gate, severity: cr.effect === "flag" ? "warn" : "block", message: `${cr.label}: ${v} is ${cr.op === "min" ? "below the minimum" : "above the maximum"} of ${cr.value}.`, fix: cr.effect === "flag" ? undefined : "Ask the applicant to confirm or update this.", ruleId: "custom" });
+  }
+
   // ---------------- Score ----------------
   const score = scoreOf(app, size, signals, territory, place, requiredCapital, effectiveCapital, feasible, config);
 
-  const holdBlocks = issues.filter((i) => i.severity === "block" && !HARD.has(i.code) && !PLACE_REDIRECT.has(i.code));
-  const hardBlocks = issues.filter((i) => i.severity === "block" && HARD.has(i.code));
+  const holdBlocks = issues.filter((i) => i.severity === "block" && !isHard(i.code) && !PLACE_REDIRECT.has(i.code));
+  const hardBlocks = issues.filter((i) => i.severity === "block" && isHard(i.code));
   return {
     app,
     issues,

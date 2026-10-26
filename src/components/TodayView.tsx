@@ -1,32 +1,73 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { Ic } from "./Icon";
-import { Card, Chip, Ring, useUi, type ReviewBucket } from "./kit";
-import { active, spotIds, type Row } from "@/lib/desk/model";
+import { Card, Chip, Ring, useUi } from "./kit";
+import { itemsFor, type Item } from "./Modals";
+import { active, spotIds } from "@/lib/desk/model";
 import { ago } from "@/lib/desk/time";
+import { MAIL_LABEL } from "@/lib/desk/types";
 
-export function ProceedRow({ r, i }: { r: Row; i: number }) {
+function QueueRow({ it, i, on, toggle }: { it: Item; i: number; on: boolean; toggle: () => void }) {
   const ui = useUi();
+  const r = it.row;
   return (
-    <div className="lrow rise" style={{ "--i": i } as CSSProperties} onClick={() => ui.open(r.id)}>
-      <Ring v={r.ui === "redir" && r.offer ? r.offer : r.fit} size={40} sw={5} s={r.ui} />
+    <div className={`lrow qrow rise${on ? " picked" : ""}`} style={{ "--i": i } as CSSProperties} onClick={() => ui.open(it.id)}>
+      <input type="checkbox" aria-label={`Select ${it.name}`} checked={on} onClick={(e) => e.stopPropagation()} onChange={toggle} />
+      {r ? <Ring v={it.s === "redir" && r.offer ? r.offer : r.fit} size={40} sw={5} s={r.ui} /> : <span />}
       <div className="nm">
-        {r.app.name}
-        <small>{r.app.city ?? r.app.cityRaw} · {r.slotPin ?? r.app.pin ?? r.app.pinRaw} · {r.id}</small>
+        {it.name}
+        <small>{it.city} · {it.pin} · {it.id}</small>
       </div>
       <div className="why">
         <div className="row wrap" style={{ gap: 6 }}>
-          <Chip s={r.ui} />
-          {r.move && <span className="tag">Your call</span>}
-          {r.locked && <span className="tag"><Ic n="lock" />Locked</span>}
+          <Chip s={it.s} />
+          <span className="tag"><Ic n="mail" />{MAIL_LABEL[it.type]}</span>
+          {r?.move && <span className="tag">Your call</span>}
+          {r?.locked && <span className="tag"><Ic n="lock" />Locked</span>}
+          {(r?.d.challenges?.length ?? 0) > 0 && <span className="tag"><Ic n="repeat" />Strong for {r!.d.challenges![0].pin} too</span>}
         </div>
-        <div style={{ marginTop: 4 }}>{r.why}</div>
+        <div style={{ marginTop: 4 }}>{it.why}</div>
+        {r && r.ui === "info" && r.asks.length > 1 && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Also asks: {r.asks.slice(1, 3).join(" · ")}</div>}
       </div>
       <div className="acts" onClick={(e) => e.stopPropagation()}>
-        <button className="btn sm primary" onClick={() => ui.mail(r.id)}><Ic n="send" />Email</button>
-        <button className="btn sm" onClick={() => ui.move([r.id])}><Ic n="move" />Move</button>
+        <button className="btn sm" onClick={() => ui.modal({ kind: "mail", id: it.id, type: it.type })}><Ic n="eye" />Preview</button>
+        {r && <button className="btn sm" onClick={() => ui.move([it.id])}><Ic n="move" />Move</button>}
       </div>
+    </div>
+  );
+}
+
+// Tick people, then send to the ones ticked. One confirm click guards against a blind send.
+function SendBar({ items, sel, setSel, verb }: { items: Item[]; sel: Record<string, boolean>; setSel: (s: Record<string, boolean>) => void; verb: string }) {
+  const ui = useUi();
+  const { ws } = ui;
+  const [sure, setSure] = useState(false);
+  const chosen = items.filter((x) => sel[x.id]);
+  const all = items.length > 0 && chosen.length === items.length;
+  const send = async () => {
+    setSure(false);
+    const list = chosen.map((x) => ({ id: x.id, type: x.type, area: x.area }));
+    setSel({ ...sel, ...Object.fromEntries(chosen.map((x) => [x.id, false])) });
+    const res = await ws.sendMail(list);
+    const moved = list.some((i) => i.type === "next" || i.type === "offer");
+    ui.toast(`${res.ok} email${res.ok === 1 ? "" : "s"} ${res.real ? "sent to the test inbox" : "sent"}${res.failed ? `, ${res.failed} failed` : ""}${moved ? ". Moved to Onboarding" : ""}`);
+  };
+  return (
+    <div className="row wrap sendbar" style={{ gap: 8 }}>
+      <label className="row" style={{ gap: 6, fontWeight: 600 }}>
+        <input type="checkbox" checked={all} onChange={(e) => { setSure(false); setSel({ ...sel, ...Object.fromEntries(items.map((x) => [x.id, e.target.checked])) }); }} /> Select all
+      </label>
+      <span className="muted">{chosen.length} of {items.length} selected</span>
+      <span className="sp" />
+      {chosen.length > 0 && !sure && <button className="btn primary" onClick={() => setSure(true)}><Ic n="send" />{verb} {chosen.length}</button>}
+      {chosen.length > 0 && sure && (
+        <>
+          <span className="muted">{ws.desk.emailMode === "demo" ? "Demo send" : "Real send to the test inbox"}.</span>
+          <button className="btn" onClick={() => setSure(false)}>Cancel</button>
+          <button className="btn primary" onClick={send}><Ic n="check" />Confirm: send to {chosen.length}</button>
+        </>
+      )}
     </div>
   );
 }
@@ -37,52 +78,53 @@ export function NowView() {
   const { ws, now } = ui;
   const { rows, desk } = ws;
   const act = active(rows);
-  const prop = act.filter((r) => r.ui === "adv" || r.ui === "redir").sort((a, b) => b.fit - a.fit);
-  const info = act.filter((r) => r.ui === "info");
-  const infoNew = info.filter((r) => !desk.mail[r.id]);
-  const wait = act.filter((r) => r.ui === "wait");
-  const waitNew = wait.filter((r) => !desk.mail[r.id]);
-  const later = [...act.filter((r) => r.ui === "no" && !desk.mail[r.id]), ...rows.filter((r) => r.ui === "exp" && !desk.onb[r.id] && !desk.mail["exp:" + r.id])];
+  const [sel, setSel] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState<"info" | "wait" | "later">("info");
+  const yes = itemsFor("proceed", ws, "");
+  const groups: Record<"info" | "wait" | "later", Item[]> = { info: itemsFor("info", ws, ""), wait: itemsFor("wait", ws, ""), later: itemsFor("later", ws, "") };
+  const GL: [typeof tab, string, string][] = [["info", "help", "Needs info"], ["wait", "hourglass", "Waitlist"], ["later", "pause", "Not now"]];
   const spot = spotIds(rows, desk.guard.spot);
   const replied = new Set(desk.replies.map((r) => r.id));
-  const asked = info.filter((r) => desk.mail[r.id] && !replied.has(r.id));
-  const typos = info.filter((r) => r.tag === "pin");
-
-  const E: { b: ReviewBucket; icon: string; s: string; title: string; sub: string; n: number }[] = [
-    { b: "info", icon: "help", s: "info", title: "Needs info", sub: `${infoNew.length} not asked yet${typos.length ? ` · ${typos.length} pin typo${typos.length === 1 ? "" : "s"}` : ""}`, n: infoNew.length },
-    { b: "wait", icon: "hourglass", s: "wait", title: "Waitlist", sub: `${waitNew.length} not told yet`, n: waitNew.length },
-    { b: "later", icon: "pause", s: "no", title: "Not now", sub: "Reason, plus a way back in", n: later.length },
-  ];
+  const asked = act.filter((r) => r.ui === "info" && desk.mail[r.id] && !replied.has(r.id));
+  const toReview = Object.entries(desk.onb).map(([id, o]) => ({ id, name: rows.find((r) => r.id === id)?.app.name ?? id, keys: Object.keys(o.docs ?? {}).filter((k) => o.chk[k] === "received") })).filter((x) => x.keys.length);
+  const toggle = (id: string) => setSel((s) => ({ ...s, [id]: !s[id] }));
 
   return (
     <div className="stack">
-      <div className="grid g2">
+      <div className="stack">
         <Card i={0}>
-          <h3>
-            <Ic n="star" />Waiting for your yes · {prop.length}
-            <span className="sp" />
-            {prop.length > 0 && <button className="btn sm primary" onClick={() => ui.review("proceed")}><Ic n="eye" />Review all {prop.length}</button>}
-          </h3>
-          <div className="stack" style={{ gap: 2 }}>
-            {prop.length ? prop.map((r, i) => <ProceedRow key={r.id} r={r} i={i} />) : <div className="muted" style={{ padding: 20, textAlign: "center" }}>Nobody is waiting. Everyone you approved is in Onboarding.</div>}
+          <h3><Ic n="star" />Waiting for your yes · {yes.length}</h3>
+          {yes.length > 0 && <SendBar items={yes} sel={sel} setSel={setSel} verb="Send next steps to" />}
+          <div className="stack" style={{ gap: 2, marginTop: 6 }}>
+            {yes.length ? yes.map((it, i) => <QueueRow key={it.id} it={it} i={i} on={!!sel[it.id]} toggle={() => toggle(it.id)} />) : <div className="muted" style={{ padding: 20, textAlign: "center" }}>Nobody is waiting. Everyone you approved is in Onboarding.</div>}
           </div>
         </Card>
-        <div className="stack">
+          {toReview.length > 0 && (
+            <Card i={1} data-s="info">
+              <h3><Ic n="file" />Documents to review · {toReview.reduce((a, x) => a + x.keys.length, 0)}</h3>
+              <div className="stack" style={{ gap: 6 }}>
+                {toReview.map((x) => (
+                  <div key={x.id} className="row" style={{ gap: 10, padding: 8, borderRadius: "var(--r-sm)", background: "var(--surface2)" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}><b>{x.name}</b><div className="muted" style={{ fontSize: 12.5 }}>{x.keys.length} document{x.keys.length === 1 ? "" : "s"} emailed, ready to verify</div></div>
+                    <button className="btn sm primary" onClick={() => ui.go("onboarding", { onb: x.id })}><Ic n="eye" />Review</button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
           <Card i={1}>
             <h3><Ic n="mail" />Emails ready to send</h3>
-            <div className="stack" style={{ gap: 6 }}>
-              {E.map((e) => (
-                <div key={e.b} className="row" data-s={e.s} style={{ gap: 10, padding: 8, borderRadius: "var(--r-sm)", background: "var(--surface2)" }}>
-                  <span className="bucket"><span className="ic" style={{ width: 32, height: 32, fontSize: 16 }}><Ic n={e.icon} /></span></span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <b>{e.title} · {e.n}</b>
-                    <div className="muted" style={{ fontSize: 12.5 }}>{e.sub}</div>
-                  </div>
-                  {e.n ? <button className="btn sm primary" onClick={() => ui.review(e.b)}><Ic n="eye" />Review {e.n}</button> : <span className="tag"><Ic n="check" />All done</span>}
-                </div>
+            <div className="seg" style={{ alignSelf: "flex-start", flexWrap: "wrap" }}>
+              {GL.map(([k, ic, l]) => (
+                <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}><Ic n={ic} />{l}<span className="n" style={{ marginLeft: 2 }}>{groups[k].length}</span></button>
               ))}
             </div>
+            {groups[tab].length > 0 && <SendBar items={groups[tab]} sel={sel} setSel={setSel} verb="Send to" />}
+            <div className="stack" style={{ gap: 2 }}>
+              {groups[tab].length ? groups[tab].map((it, i) => <QueueRow key={it.id} it={it} i={i} on={!!sel[it.id]} toggle={() => toggle(it.id)} />) : <div className="muted" style={{ padding: 16, textAlign: "center" }}>All done here.</div>}
+            </div>
           </Card>
+          <div className="grid g2">
           <Card i={2}>
             <h3><Ic n="inbox" />Replies to read · {desk.replies.length}</h3>
             <div className="stack" style={{ gap: 6 }}>

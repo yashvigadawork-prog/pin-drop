@@ -2,10 +2,11 @@
 
 import { useState, type CSSProperties } from "react";
 import { Ic } from "./Icon";
-import { CHECK_GROUPS, CK_META, PLAN_STEPS, type Desk, type OnbRec } from "@/lib/desk/types";
+import { CHECK_GROUPS, CK_META, PLAN_STEPS, type CheckState, type Desk, type OnbRec } from "@/lib/desk/types";
+import { attachmentUrl } from "@/lib/desk/inbox";
 import type { Row } from "@/lib/desk/model";
 
-export function Checklist({ o, mods, interactive, onCycle, onRemind }: { o?: OnbRec; mods: Desk["mods"]; interactive?: boolean; id: string; onCycle?: (key: string) => void; onRemind?: (key: string) => void }) {
+export function Checklist({ o, mods, interactive, id, onCycle, onRemind, onSet }: { o?: OnbRec; mods: Desk["mods"]; interactive?: boolean; id: string; onCycle?: (key: string) => void; onRemind?: (key: string) => void; onSet?: (key: string, s: CheckState) => void }) {
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   return (
     <>
@@ -25,12 +26,15 @@ export function Checklist({ o, mods, interactive, onCycle, onRemind }: { o?: Onb
               g.items.map(([key, label]) => {
                 const s = o?.chk[key] ?? "todo";
                 const m = CK_META[s];
+                const doc = o?.docs?.[key];
+                const view = attachmentUrl(id, key);
                 return (
                   <div key={key} className="chk" data-k={s}>
                     <span className="b"><Ic n={m[0]} /></span>
                     <div>
                       <b>{label}</b>
-                      <small>{s === "flag" ? "Needs a closer look" : m[1]}</small>
+                      <small>{s === "flag" ? "Needs a closer look" : s === "received" && doc ? `For your review · ${doc.file}` : m[1]}</small>
+                      {s === "received" && doc && <small className="muted">From {doc.from}</small>}
                     </div>
                     <span className="row" style={{ gap: 6 }}>
                       {interactive && s === "todo" && <button className="btn sm" onClick={() => onCycle?.(key)}>Ask</button>}
@@ -40,7 +44,10 @@ export function Checklist({ o, mods, interactive, onCycle, onRemind }: { o?: Onb
                           <button className="btn sm" onClick={() => onCycle?.(key)}>Mark received</button>
                         </>
                       )}
-                      {interactive && s === "received" && <button className="btn sm primary" onClick={() => onCycle?.(key)}>Verify</button>}
+                      {interactive && s === "received" && doc && view && <a className="btn sm" href={view} target="_blank" rel="noreferrer"><Ic n="eye" />View</a>}
+                      {interactive && s === "received" && doc && <a className="btn sm" href={doc.link} target="_blank" rel="noreferrer"><Ic n="mail" />Open email</a>}
+                      {interactive && s === "received" && <button className="btn sm primary" onClick={() => (onSet ? onSet(key, "verified") : onCycle?.(key))}>Verify</button>}
+                      {interactive && s === "received" && onSet && <button className="btn sm" onClick={() => onSet(key, "flag")}>Flag</button>}
                       {interactive && s === "flag" && <button className="btn sm primary" onClick={() => onCycle?.(key)}>Resolve</button>}
                       {interactive && s === "verified" && <button className="btn sm ghost" onClick={() => onCycle?.(key)}>Undo</button>}
                     </span>

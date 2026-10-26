@@ -2,11 +2,11 @@
 
 import type { CSSProperties } from "react";
 import { Ic } from "./Icon";
-import { BucketIcon, Card, CountUp, Delta, Meter, useUi } from "./kit";
+import { BucketIcon, Card, CountUp, Delta, InfoTip, Meter, useUi } from "./kit";
 import { NowView } from "./TodayView";
 import { active, countBy, type Row } from "@/lib/desk/model";
 import { UI_GROUPS, UI_ORDER, type UiStatus } from "@/lib/desk/types";
-import { SAMPLE_TREND, REASON_META, funnel, reasonCounts, stageTimes, type ReasonKey } from "@/lib/desk/metrics";
+import { SAMPLE_TREND, REASON_META, funnel, reasonCounts, reasonOf, stageTimes, type ReasonKey } from "@/lib/desk/metrics";
 import { daysSince } from "@/lib/desk/time";
 
 export function Donut({ rows, onPick }: { rows: Row[]; onPick: (s: UiStatus) => void }) {
@@ -70,7 +70,6 @@ function PerfView() {
   const { ws, now, nav, setNav } = ui;
   const { rows, desk, result } = ws;
   if (!result) return null;
-  const all = rows.length;
   const times = stageTimes(desk, now);
   const known = times.filter((t) => t.avg !== null);
   const worst = known.filter((t) => t.avg! > t.target).sort((a, b) => b.avg! - b.target - (a.avg! - a.target))[0];
@@ -90,10 +89,40 @@ function PerfView() {
   const slotsAll = result.territories.reduce((a, t) => a + t.territory.slots, 0);
   const slotsFilled = rows.filter((r) => r.slotTerr && (r.ui === "adv" || r.ui === "redir")).length;
   const waitingYes = active(rows).filter((r) => r.ui === "adv" || r.ui === "redir").length;
-  const K: { icon: string; s: "adv" | "redir" | "wait"; n: number; of?: number; label: string; sub: React.ReactNode; go: () => void }[] = [
-    { icon: "layers", s: "adv", n: slotsFilled, of: slotsAll, label: "Slots filled", sub: <span className="dl">{slotsAll - slotsFilled} still open</span>, go: () => ui.go("places", { placesTab: "terr" }) },
-    { icon: "trend", s: "redir", n: trend ? trend[3] : 0, label: "Days to signed agreement", sub: trend ? <span className="dl">{trend[2] - trend[3]} days faster than last week</span> : <span className="dl">Appears after a week of use</span>, go: () => setNav({ period: "week" }) },
-    { icon: "check", s: "wait", n: waitingYes, label: "Decisions waiting", sub: <span className="dl">Waiting for your yes</span>, go: () => setNav({ ovTab: "now" }) },
+  const waitList = active(rows).filter((r) => r.ui === "adv" || r.ui === "redir").sort((x, y) => y.fit - x.fit);
+  const K: { icon: string; s: "adv" | "redir" | "wait"; n: number; of?: number; label: string; sub: React.ReactNode; tip: React.ReactNode; goLabel: string; go: () => void }[] = [
+    {
+      icon: "layers", s: "adv", n: slotsFilled, of: slotsAll, label: "Slots filled", sub: <span className="dl">{slotsAll - slotsFilled} still open</span>,
+      tip: (
+        <ul className="tiplist">
+          {result.territories.map((t) => {
+            const al = rows.filter((r) => r.slotTerr === t.territory.id && (r.ui === "adv" || r.ui === "redir")).length;
+            return <li key={t.territory.id}><span>{t.territory.city} <span className="muted mono">{t.territory.id}</span></span><b className="mono">{al}/{t.territory.slots}</b></li>;
+          })}
+        </ul>
+      ),
+      goLabel: "Open Territories", go: () => ui.go("places", { placesTab: "terr" }),
+    },
+    {
+      icon: "trend", s: "redir", n: trend ? trend[3] : 0, label: "Days to signed agreement", sub: trend ? <span className="dl">{trend[2] - trend[3]} days faster than last week</span> : <span className="dl">Appears after a week of use</span>,
+      tip: trend ? (
+        <ul className="tiplist">
+          {trend.map((v, i) => <li key={i}><span>{i === 3 ? "Now" : `${3 - i} week${3 - i === 1 ? "" : "s"} ago`}</span><b className="mono">{v} d</b></li>)}
+        </ul>
+      ) : <span className="muted">No history yet. It fills in as partners sign.</span>,
+      goLabel: "Open Onboarding", go: () => ui.go("onboarding"),
+    },
+    {
+      icon: "check", s: "wait", n: waitingYes, label: "Decisions waiting", sub: <span className="dl">Waiting for your yes</span>,
+      tip: (
+        <ul className="tiplist">
+          {waitList.slice(0, 5).map((r) => <li key={r.id}><span>{r.app.name}</span><b className="mono">{r.fit}</b></li>)}
+          {waitList.length > 5 && <li className="muted">+ {waitList.length - 5} more</li>}
+          {!waitList.length && <li className="muted">Nobody is waiting.</li>}
+        </ul>
+      ),
+      goLabel: "Open the list", go: () => setNav({ ovTab: "now" }),
+    },
   ];
 
   return (
@@ -148,39 +177,27 @@ function PerfView() {
 
       <div className="grid g3">
         {K.map((k, i) => (
-          <button key={k.label} className="card hov rise bucket" data-s={k.s} style={{ "--i": i + 2, textAlign: "left" } as CSSProperties} onClick={k.go}>
+          <div key={k.label} className="card rise bucket" data-s={k.s} style={{ "--i": i + 2 } as CSSProperties}>
             <div className="row">
               <span className="ic"><Ic n={k.icon} /></span>
               <span className="sp" />
               <span className="eyebrow">{k.label}</span>
+              <InfoTip label={k.label} goLabel={k.goLabel} onGo={k.go}>{k.tip}</InfoTip>
             </div>
             <div className="row" style={{ alignItems: "baseline", gap: 6 }}>
               {k.label.startsWith("Days") && !trend ? <span className="num">n/a</span> : <CountUp className="num" to={k.n} />}
               {k.of !== undefined && <span className="muted" style={{ fontSize: 18, fontWeight: 600 }}>/ {k.of}</span>}
             </div>
             {k.sub}
-          </button>
+          </div>
         ))}
       </div>
 
       <div className="grid g2">
         <Card i={3}>
           <h3><Ic n="filter" />From application to open store</h3>
-          <div className="stack" style={{ gap: 8 }}>
-            {fun.map(([label, n], i) => {
-              const prev = i ? fun[i - 1][1] : n;
-              const pc = prev ? Math.round((n / prev) * 100) : 0;
-              return (
-                <div key={label} className="row" style={{ gap: 10 }}>
-                  <span style={{ width: 150, fontSize: 12.5 }}>{label}</span>
-                  <Meter pct={(n / Math.max(1, all)) * 100} color="var(--accent)" i={i} style={{ flex: 1 }} />
-                  <b className="mono" style={{ width: 26, textAlign: "right" }}>{n}</b>
-                  <span className="mono muted" style={{ width: 38, fontSize: 11 }}>{i ? `${pc}%` : ""}</span>
-                </div>
-              );
-            })}
-          </div>
-          <p className="muted" style={{ marginTop: 10, fontSize: 12.5 }}>The % is how many made it from the step before.</p>
+          <Funnel steps={fun} />
+          <p className="muted" style={{ marginTop: 10, fontSize: 12.5 }}>The % shows how many made it from the step before.</p>
         </Card>
 
         <Card i={4}>
@@ -255,17 +272,26 @@ function PerfView() {
         <Card i={7}>
           <h3><Ic n="help" />Why people are not proceeding</h3>
           <div className="stack" style={{ gap: 10 }}>
-            {(Object.keys(REASON_META) as ReasonKey[]).map((k, i) => (
-              <button key={k} className="row" style={{ gap: 10, textAlign: "left" }} onClick={() => ui.go("pipeline", { filter: "all" })}>
-                <span className="bucket"><span className="ic" style={{ width: 30, height: 30, fontSize: 15, color: "var(--ink)", background: "var(--surface2)" }}><Ic n={REASON_META[k][0]} /></span></span>
-                <span style={{ flex: 1, fontSize: 12.5 }}>{REASON_META[k][1]}</span>
-                <Meter pct={(rc[k] / rmax) * 100} color="var(--accent)" i={i} style={{ width: 70 }} />
-                <b className="mono" style={{ width: 18 }}>{rc[k]}</b>
-              </button>
-            ))}
+            {(Object.keys(REASON_META) as ReasonKey[]).map((k, i) => {
+              const who = rows.filter((r) => reasonOf(r) === k);
+              return (
+                <div key={k} className="row" style={{ gap: 10 }}>
+                  <span className="bucket"><span className="ic" style={{ width: 30, height: 30, fontSize: 15, color: "var(--ink)", background: "var(--surface2)" }}><Ic n={REASON_META[k][0]} /></span></span>
+                  <span style={{ flex: 1, fontSize: 12.5 }}>{REASON_META[k][1]}</span>
+                  <Meter pct={(rc[k] / rmax) * 100} color="var(--accent)" i={i} style={{ width: 70 }} />
+                  <b className="mono" style={{ width: 18 }}>{rc[k]}</b>
+                  <InfoTip label={REASON_META[k][1]} goLabel={`See these ${who.length}`} onGo={() => ui.go("pipeline", { reason: k })}>
+                    <ul className="tiplist">
+                      {who.slice(0, 6).map((r) => <li key={r.id}><button className="lnk" onClick={(e) => { e.stopPropagation(); ui.open(r.id); }}>{r.app.name}</button><span className="muted mono">{r.id}</span></li>)}
+                      {who.length > 6 && <li className="muted">+ {who.length - 6} more</li>}
+                      {!who.length && <li className="muted">Nobody right now.</li>}
+                    </ul>
+                  </InfoTip>
+                </div>
+              );
+            })}
           </div>
         </Card>
-
       </div>
 
       <Card i={8}>
@@ -292,6 +318,31 @@ function PerfView() {
           ))}
         </div>
       </Card>
+    </div>
+  );
+}
+
+function Funnel({ steps }: { steps: [string, number][] }) {
+  const top = Math.max(1, steps[0]?.[1] ?? 1);
+  return (
+    <div className="funnel">
+      {steps.map(([label, n], i) => {
+        const w = Math.max(10, (n / top) * 100);
+        const next = i < steps.length - 1 ? Math.max(8, (steps[i + 1][1] / top) * 100) : w * 0.82;
+        const inset = Math.max(0, ((w - Math.min(w, next)) / 2 / w) * 100);
+        const pc = i && steps[i - 1][1] ? Math.round((n / steps[i - 1][1]) * 100) : null;
+        return (
+          <div key={label} className="fstep" style={{ "--i": i } as CSSProperties}>
+            <span className="flabel">{label}</span>
+            <span className="farea">
+              <span className="fbar" style={{ width: `${w}%`, clipPath: `polygon(0 0, 100% 0, ${100 - inset}% 100%, ${inset}% 100%)`, opacity: 1 - i * 0.06 } as CSSProperties}>
+                <b>{n}</b>
+              </span>
+            </span>
+            <span className={`fpc${pc !== null && pc < 50 ? " low" : ""}`}>{pc !== null ? `${pc}%` : ""}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

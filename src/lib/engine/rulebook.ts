@@ -19,6 +19,25 @@ export interface EvidenceCard {
 export const EVIDENCE = evidence as EvidenceCard[];
 export const evidenceById = (id: string) => EVIDENCE.find((e) => e.id === id);
 
+// Two or three lines at most. The full rule, the reason and the evidence sit behind "Details".
+export const BRIEF: Record<string, string> = {
+  "owner-decides": "The engine recommends. You decide. A pin you confirm is never taken away by a later re-run.",
+  "data-integrity": "Missing or conflicting facts never cause a rejection. They become a question for the applicant.",
+  "one-store-per-pin": "One store per pin code. If two people want one pin, the stronger one gets it. The other is offered a free pin or waitlisted.",
+  "territory-plan": "We only open in planned territories. The free pins in a territory are the real limit on its slots.",
+  capital: "Each city tier has a minimum investment. More headroom scores higher.",
+  financing: "Up to 15% short counts as financing probable. We ask how they will cover the gap. A sanctioned loan clears it.",
+  "owner-operator": "Someone named must run the store full-time. If it sounds like they will not, we flag it and ask who will.",
+  experience: "More retail experience scores higher. No experience is fine, but adds extra training.",
+  space: "Space must be at least 250 sq ft, ideally 300 to 500. Smaller goes on hold until they find a bigger site.",
+  floor: "Ground floor or mall unit only. An upper floor goes on hold until they find a better space.",
+  timeline: "We plan the real earliest opening, not the hoped-for date. Faster targets are flagged.",
+  training: "Training is in the partner's language, at a real store. First-time operators get extra training.",
+  payback: "Payback is shown for information only. It never changes the ranking.",
+  challenger: "If someone loses their pin but beats a neighbouring pin's holder by 10+ points, we flag that pin as an extra offer. You decide.",
+  custom: "Assumptions you add apply on the next re-decide. A miss can ask a question, flag, or stop the application. Your choice.",
+};
+
 export interface Rule {
   id: string;
   gate: "Application" | "Place" | "Partner" | "Premises" | "Pace" | "Readiness" | "Governance";
@@ -30,6 +49,23 @@ export interface Rule {
 }
 
 export const RULES: Rule[] = [
+  {
+    id: "challenger",
+    gate: "Place",
+    title: "A strong loser may also be offered a neighbouring pin",
+    rule: "When an applicant loses their own pin to a stronger applicant, we compare their score with the holders of the other pins in the same territory. If they beat a holder by the challenger margin (default 10 points), that pin is flagged as an extra offer. Nobody is moved until the owner confirms.",
+    why: "Slots are scarce and strong partners are rarer than slots. A partner who narrowly lost one pin should not be lost altogether when a neighbouring pin is held by someone clearly weaker.",
+    assumption: "The 10-point margin is an assumption. Change it in Assumptions.",
+    evidence: [],
+  },
+  {
+    id: "custom",
+    gate: "Governance",
+    title: "Assumptions you add",
+    rule: "Owner-added assumptions test one number from the application (investment, experience, space size or target months). A miss either asks a question, adds a flag, or stops the application, as you choose.",
+    why: "Every threshold is a judgment. The owner should be able to test a different one without waiting for a software change.",
+    evidence: [],
+  },
   {
     id: "owner-decides",
     gate: "Governance",

@@ -3,6 +3,7 @@ import { evaluate, relocationScore, type Ctx, type Evaluation } from "./evaluate
 import { buildPlan } from "./plan";
 import type {
   Allocation,
+  Challenge,
   Change,
   Competition,
   Decision,
@@ -195,11 +196,32 @@ export function runEngine(input: EngineInput, config: EngineConfig = DEFAULT_CON
     r.competition = comp;
   }
 
+  // ---- 5b. challengers ----
+  // A strong applicant who lost their own pin to someone better may also be strong enough for
+  // a neighbouring pin in the same territory. If they beat that pin's holder by the margin, we
+  // flag it. Nobody is moved: the owner decides.
+  const margin = config.challengeMargin ?? 10;
+  const challenges = new Map<string, Challenge[]>();
+  for (const [id, r] of result) {
+    const ev = evals.get(id)!;
+    if (!ev.territory || ev.place !== "own_pin" || ev.hardBlocks.length || ev.holdBlocks.length) continue;
+    if (!(r.status === "WAITLIST" || r.status === "REDIRECT") || !r.extraNotes.includes("pin_taken")) continue;
+    const mine = ev.score.total;
+    const list: Challenge[] = [];
+    for (const a of slots.get(ev.territory.id)!.view.allocated) {
+      if (a.appId === id || a.locked || a.kind !== "own_pin" || a.pin === ev.app.pin) continue;
+      const theirs = evals.get(a.appId)!.score.total;
+      if (mine - theirs >= margin) list.push({ pin: a.pin, territoryId: ev.territory.id, vsId: a.appId, vsName: evals.get(a.appId)!.app.name, vsScore: theirs, myScore: mine, margin: mine - theirs });
+    }
+    if (list.length) challenges.set(id, list.sort((x, y) => y.margin - x.margin));
+  }
+
   // ---- 6. build decisions ----
   const decisions: Record<string, Decision> = {};
   for (const [id, ev] of evals) {
     const r = result.get(id)!;
     decisions[id] = buildDecision(ev, r.status, r.allocation, r.competition, r.owner, r.extraNotes, { today, config, input, slots, evals }, moved(id) ? relocation.get(id) : undefined);
+    if (challenges.has(id)) decisions[id].challenges = challenges.get(id);
   }
   const counts = { ADVANCE: 0, HOLD: 0, WAITLIST: 0, REDIRECT: 0, NOT_NOW: 0, WITHDRAWN: 0 } as Record<Status, number>;
   for (const d of Object.values(decisions)) counts[d.status]++;

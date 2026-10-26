@@ -11,6 +11,7 @@ import { OverviewView } from "./OverviewView";
 import { PipelineView } from "./PipelineView";
 import { PlacesView } from "./PlacesView";
 import { RankingMenu } from "./RankingMenu";
+import { RulebookView } from "./RulebookView";
 import { SettingsView } from "./SettingsView";
 import { UiCtx, type DrawerTab, type ModalState, type NavState, type ReviewBucket, type Ui, type View } from "./kit";
 import { useWorkspace } from "./useWorkspace";
@@ -23,16 +24,18 @@ const NAV: [View, string, string][] = [
   ["pipeline", "list", "Pipeline"],
   ["onboarding", "clip", "Onboarding"],
   ["places", "map", "Places"],
-  ["settings", "sliders", "Rules and settings"],
+  ["rulebook", "book", "Rulebook"],
+  ["settings", "sliders", "Settings"],
 ];
 const TITLES: Record<View, [string, string]> = {
   overview: ["Overview", "What needs you, and how we are doing"],
   pipeline: ["Pipeline", "Applicants still being decided"],
   onboarding: ["Onboarding", "From yes to open store"],
   places: ["Places", "Map, territories and the expansion list"],
-  settings: ["Rules and settings", "Areas, checks, email and the rulebook"],
+  rulebook: ["Rulebook", "The rules and the assumptions behind every decision"],
+  settings: ["Settings", "Areas, checks, email and history"],
 };
-const NAV0: NavState = { filter: "all", q: "", sort: "fit", showMoved: false, terrF: null, pick: {}, setting: "areas", onb: "", expF: null, expCity: "", city: null, layers: { app: true, store: true, exp: true }, period: "week", ovTab: "now", placesTab: "terr" };
+const NAV0: NavState = { filter: "all", q: "", sort: "fit", showMoved: false, terrF: null, pick: {}, setting: "areas", onb: "", expF: null, expCity: "", city: null, layers: { app: true, store: true, exp: true }, period: "week", reason: null, ovTab: "now", placesTab: "terr" };
 
 function useTheme() {
   const [dark, setDark] = useState(false);
@@ -105,7 +108,8 @@ export default function App() {
         ...(target === "map" ? { placesTab: "terr" as const } : {}),
         ...(target === "expansion" ? { placesTab: "exp" as const } : {}),
         ...(o.placesTab ? { placesTab: o.placesTab } : {}),
-        ...(o.filter !== undefined ? { filter: o.filter as UiStatus | "all", terrF: null } : {}),
+        ...(o.filter !== undefined ? { filter: o.filter as UiStatus | "all", terrF: null, reason: null } : {}),
+        ...(o.reason !== undefined ? { reason: o.reason, filter: "all" as const, terrF: null, showMoved: true } : {}),
         ...(o.terr !== undefined ? { terrF: o.terr, filter: "all" as const } : {}),
         ...(o.showMoved !== undefined ? { showMoved: o.showMoved } : {}),
         ...(o.onb ? { onb: o.onb } : {}),
@@ -159,7 +163,7 @@ export default function App() {
 
   const t = TITLES[view];
   const badge = (v: View) => (v === "overview" ? active(rows).filter((r) => r.ui === "adv" || r.ui === "redir").length + desk.replies.length : v === "pipeline" ? active(rows).length : v === "places" ? ws.expList.length : v === "onboarding" ? Object.keys(desk.onb).length : null);
-  const body = { overview: <OverviewView />, pipeline: <PipelineView />, onboarding: <OnboardingView />, places: <PlacesView />, settings: <SettingsView /> }[view];
+  const body = { overview: <OverviewView />, pipeline: <PipelineView />, onboarding: <OnboardingView />, places: <PlacesView />, rulebook: <RulebookView />, settings: <SettingsView /> }[view];
 
   return (
     <UiCtx.Provider value={ui}>
@@ -215,7 +219,7 @@ export default function App() {
 
         <nav className="tabbar" aria-label="Main">
           {NAV.map(([v, ic, l]) => (
-            <button key={v} className={view === v ? "on" : ""} onClick={() => go(v)}><Ic n={ic} />{v === "settings" ? "Rules" : l}</button>
+            <button key={v} className={view === v ? "on" : ""} onClick={() => go(v)}><Ic n={ic} />{v === "settings" ? "Settings" : v === "onboarding" ? "Onboard" : l}</button>
           ))}
         </nav>
 

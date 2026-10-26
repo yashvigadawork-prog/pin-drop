@@ -1,12 +1,12 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Ic } from "./Icon";
 import type { Workspace } from "./useWorkspace";
 import { UI_META, type UiStatus } from "@/lib/desk/types";
 import { statusWord } from "@/lib/engine/engine";
 
-export type View = "overview" | "pipeline" | "onboarding" | "places" | "settings";
+export type View = "overview" | "pipeline" | "onboarding" | "places" | "rulebook" | "settings";
 // Older names still work as targets: Today is the first Overview tab. Map and Expansion are parts of Places.
 export type GoTarget = View | "today" | "map" | "expansion";
 export type ReviewBucket = "proceed" | "info" | "wait" | "later" | "fresh" | "exp2";
@@ -16,7 +16,7 @@ export interface Ui {
   ws: Workspace;
   now: number;
   view: View;
-  go: (v: GoTarget, opts?: { onb?: string; settings?: string; filter?: string; terr?: string | null; showMoved?: boolean; placesTab?: "terr" | "exp"; expF?: string | null; expCity?: string }) => void;
+  go: (v: GoTarget, opts?: { onb?: string; settings?: string; filter?: string; terr?: string | null; reason?: string | null; showMoved?: boolean; placesTab?: "terr" | "exp"; expF?: string | null; expCity?: string }) => void;
   open: (id: string, tab?: DrawerTab, paste?: string) => void;
   mail: (id: string) => void;
   move: (ids: string[], o?: { spot?: boolean; target?: UiStatus }) => void;
@@ -41,6 +41,7 @@ export interface NavState {
   city: string | null;
   layers: { app: boolean; store: boolean; exp: boolean };
   period: "week" | "month";
+  reason: string | null;
   ovTab: "now" | "perf";
   placesTab: "terr" | "exp";
 }
@@ -87,7 +88,7 @@ export function Tag({ children, warn, icon, onClick }: { children: ReactNode; wa
   );
 }
 
-export function Ring({ v, size = 40, sw = 5, s }: { v: number; size?: number; sw?: number; s?: UiStatus }) {
+export function Ring({ v, size = 40, sw = 5, s, pct }: { v: number; size?: number; sw?: number; s?: UiStatus; pct?: boolean }) {
   const r = (size - sw) / 2;
   const C = 2 * Math.PI * r;
   const len = (C * Math.max(0, Math.min(100, v))) / 100;
@@ -99,8 +100,36 @@ export function Ring({ v, size = 40, sw = 5, s }: { v: number; size?: number; sw
         <circle className="arc" cx={h} cy={h} r={r} fill="none" stroke={s ? "var(--c)" : "var(--accent)"} strokeWidth={sw} strokeLinecap="round" style={{ "--cc": C, strokeDasharray: `${len} ${C}` } as CSSProperties} />
       </svg>
       <span className="v" style={{ fontSize: Math.round(size * 0.3) }}>
-        {Math.round(v)}
+        {Math.round(v)}{pct ? "%" : ""}
       </span>
+    </span>
+  );
+}
+
+// A small (i) button. Hover or tap shows the numbers. The link inside leads to the full page.
+export function InfoTip({ label, children, goLabel, onGo, wide }: { label: string; children: ReactNode; goLabel?: string; onGo?: () => void; wide?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [open]);
+  return (
+    <span className="infotip" ref={box} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button type="button" className="ibtn" aria-label={label} aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}>
+        <Ic n="info" />
+      </button>
+      {open && (
+        <span className={`tip${wide ? " wide" : ""}`} role="tooltip">
+          <b>{label}</b>
+          {children}
+          {onGo && <button type="button" className="lnk tipgo" onClick={(e) => { e.stopPropagation(); setOpen(false); onGo(); }}>{goLabel ?? "Go to the page"} →</button>}
+        </span>
+      )}
     </span>
   );
 }

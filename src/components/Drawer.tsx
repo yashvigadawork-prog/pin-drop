@@ -130,6 +130,22 @@ function WhyTab({ r }: { r: Row }) {
         )}
       </div>
 
+      {(d.challenges?.length ?? 0) > 0 && (
+        <div className="card" data-s="redir" style={box}>
+          <div className="eyebrow">Also strong enough for a neighbouring pin</div>
+          <p className="muted" style={{ margin: "4px 0 8px" }}>They lost their own pin, but they score well above the person holding these. You decide.</p>
+          <div className="stack" style={{ gap: 8 }}>
+            {d.challenges!.map((c) => (
+              <div key={c.pin} className="row wrap" style={{ gap: 8 }}>
+                <span className="tag mono"><Ic n="pin" />{c.pin}</span>
+                <span style={{ flex: 1, minWidth: 160 }}>Beats {c.vsName} by <b>{c.margin}</b> points ({c.myScore} vs {c.vsScore}).</span>
+                <button className="btn sm primary" onClick={() => { ws.offerPin(r.id, c.territoryId, c.pin); ui.toast(`${r.app.name.split(" ")[0]} offered pin ${c.pin}`); }}><Ic n="repeat" />Offer this pin</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="card" style={box}>
         <h3><Ic n="book" />In plain words</h3>
         <ul className="plain">{sentences(d.explanation).map((t, i) => <li key={i}>{t}</li>)}</ul>

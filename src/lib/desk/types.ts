@@ -77,7 +77,9 @@ export interface Move {
   pin?: string;
   terr?: string;
 }
+export interface DocEvidence { file: string; from: string; subject: string; at: string; link: string }
 export interface OnbRec {
+  docs?: Record<string, DocEvidence>; // documents the partner emailed, waiting for the owner to verify
   stage: number;
   chk: Record<string, CheckState>;
   since: string;

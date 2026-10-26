@@ -4,8 +4,8 @@ import { useState, type ReactNode } from "react";
 import { Ic } from "./Icon";
 import { Chip, Ring, useUi, type ModalState, type ReviewBucket } from "./kit";
 import { ctxFromExp, ctxFromRow, defaultMailType, mailFor, toText } from "@/lib/desk/mail";
-import { active, byCity, freePins, type Row } from "@/lib/desk/model";
-import { stageTimes, summaryLines } from "@/lib/desk/metrics";
+import { active, freePins, type Row } from "@/lib/desk/model";
+import { STAKEHOLDERS, buildSummary, seniorOf, summaryText, type StakeKey } from "@/lib/desk/summary";
 import { MAIL_LABEL, UI_META, type MailType, type UiStatus } from "@/lib/desk/types";
 
 function Shell({ title, eyebrow, onClose, children, foot, wide, sheet }: { title: string; eyebrow?: string; onClose: () => void; children: ReactNode; foot?: ReactNode; wide?: boolean; sheet?: boolean }) {
@@ -87,8 +87,8 @@ function MailModal({ id, type: t0, onClose }: { id: string; type?: MailType; onC
 }
 
 /* ---------- review a whole bucket ---------- */
-interface Item { id: string; name: string; city: string; pin: string; s: UiStatus; why: string; type: MailType; row?: Row; area?: string }
-function itemsFor(b: ReviewBucket, ws: ReturnType<typeof useUi>["ws"], expCity: string): Item[] {
+export interface Item { id: string; name: string; city: string; pin: string; s: UiStatus; why: string; type: MailType; row?: Row; area?: string }
+export function itemsFor(b: ReviewBucket, ws: ReturnType<typeof useUi>["ws"], expCity: string): Item[] {
   const { rows, desk, expList } = ws;
   const act = active(rows);
   const fromRow = (r: Row, type: MailType, why = r.why): Item => ({ id: r.id, name: r.app.name, city: r.app.city ?? r.app.cityRaw, pin: r.slotPin ?? r.app.pin ?? r.app.pinRaw, s: r.ui, why, type, row: r });
@@ -285,9 +285,13 @@ function StoresModal({ onClose }: { onClose: () => void }) {
 function SummaryModal({ onClose }: { onClose: () => void }) {
   const ui = useUi();
   const { ws, now } = ui;
-  const [to, setTo] = useState("CEO");
+  const [to, setTo] = useState<StakeKey[]>(["ceo"]);
   const [when, setWhen] = useState("Send now");
-  const lines = summaryLines(ws.rows, ws.desk, ws.expList.length, byCity(ws.expList).length, stageTimes(ws.desk, now));
+  const lead = seniorOf(to);
+  const names = to.map((k) => STAKEHOLDERS.find((s) => s.key === k)!.name);
+  const copied = names.filter((n) => n !== STAKEHOLDERS.find((s) => s.key === lead)!.name);
+  const sm = buildSummary(lead, ws, now, copied);
+  const toggle = (k: StakeKey) => setTo((cur) => (cur.includes(k) ? (cur.length > 1 ? cur.filter((x) => x !== k) : cur) : [...cur, k]));
   return (
     <Shell title="Email this summary" eyebrow="Overview" onClose={onClose} foot={
       <>
@@ -295,18 +299,27 @@ function SummaryModal({ onClose }: { onClose: () => void }) {
         <span className="sp" />
         <button className="btn primary" onClick={async () => {
           onClose();
-          ws.logSummary(to, when);
-          if (ws.desk.emailMode === "real") await fetch("/api/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: "team", sub: "Pin Drop weekly summary", text: lines.join("\n") }) }).catch(() => {});
-          ui.toast(`Summary ${when === "Send now" ? "sent" : "scheduled"} for ${to}`);
+          ws.logSummary(names.join(", "), when);
+          if (ws.desk.emailMode === "real") await fetch("/api/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: names.join(", "), sub: sm.sub, text: summaryText(sm) }) }).catch(() => {});
+          ui.toast(`Summary ${when === "Send now" ? "sent" : "scheduled"} for ${names.join(", ")}`);
         }}><Ic n="send" />{ws.desk.emailMode === "demo" ? "Send (demo)" : "Send"}</button>
       </>
     }>
-      <div className="row wrap" style={{ gap: 8 }}>
-        <label className="row" style={{ gap: 6 }}><span style={{ fontWeight: 600 }}>To</span><select className="sel" value={to} onChange={(e) => setTo(e.target.value)}><option>CEO</option><option>Head of Expansion</option><option>Finance lead</option></select></label>
+      <div className="stack" style={{ gap: 8 }}>
+        <span style={{ fontWeight: 600 }}>To (pick one or more)</span>
+        <div className="row wrap" style={{ gap: 6 }}>
+          {STAKEHOLDERS.map((s) => (
+            <button key={s.key} className={`fchip${to.includes(s.key) ? " on" : ""}`} onClick={() => toggle(s.key)} title={s.focus}>
+              {to.includes(s.key) && <Ic n="check" />}{s.name}
+            </button>
+          ))}
+        </div>
+        <div className="muted" style={{ fontSize: 12.5 }}>
+          {to.length > 1 ? `Written for the most senior person picked (${STAKEHOLDERS.find((s) => s.key === lead)!.name}). The others are copied.` : STAKEHOLDERS.find((s) => s.key === lead)!.focus + "."}
+        </div>
         <label className="row" style={{ gap: 6 }}><span style={{ fontWeight: 600 }}>When</span><select className="sel" value={when} onChange={(e) => setWhen(e.target.value)}><option>Send now</option><option>Every Monday, 9:00</option></select></label>
       </div>
-      <div className="mail"><div className="sub">Pin Drop weekly summary</div><ul>{lines.map((l) => <li key={l}>{l}</li>)}</ul><p>Full numbers are on the Overview page.</p></div>
+      <div className="mail"><div className="sub">{sm.sub}</div><p>{sm.intro}</p><ul>{sm.lines.map((l) => <li key={l}>{l}</li>)}</ul><p><b>{sm.ask}</b></p><p>Full numbers are on the Overview page.</p></div>
     </Shell>
   );
 }
-

@@ -190,6 +190,7 @@ export interface Decision {
   requiredCapital: number | null;
   effectiveCapital: number | null;
   alternatives: string[];
+  challenges?: Challenge[]; // neighbouring pins this applicant is strong enough to be offered too
 }
 
 export interface OwnerAction {
@@ -219,6 +220,28 @@ export interface EngineConfig {
   phaseName: string;
   monthlyRevenue: Record<Tier, number>; // ₹ lakh / month, indicative store sales
   netMargin: number; // partner net margin on sales, used only for indicative payback
+  challengeMargin?: number; // points a stronger loser must beat a neighbouring pin's holder by, to be offered that pin too
+  custom?: CustomRule[]; // assumptions the owner adds in the app, applied without a redeploy
+}
+
+// An owner-added assumption: "experience must be at least 2 years", effect = what happens when it fails.
+export interface CustomRule {
+  id: string;
+  label: string;
+  field: "investment" | "experience" | "sizeSqft" | "targetMonths";
+  op: "min" | "max";
+  value: number;
+  effect: "hold" | "flag" | "notnow";
+}
+
+export interface Challenge {
+  pin: string;
+  territoryId: string;
+  vsId: string;
+  vsName: string;
+  vsScore: number;
+  myScore: number;
+  margin: number;
 }
 
 export interface TerritoryView {

@@ -1,11 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Ic } from "./Icon";
 import { Card, useUi } from "./kit";
-import { DEFAULT_CONFIG } from "@/lib/engine/config";
-import { EVIDENCE, RULES, evidenceById } from "@/lib/engine/rulebook";
-import type { EngineConfig, Tier } from "@/lib/engine/types";
 import { MAP_CITIES, MODS, PIN_PREFIX } from "@/lib/desk/types";
 import { ago } from "@/lib/desk/time";
 
@@ -13,7 +9,7 @@ const TABS: [string, string, string][] = [
   ["areas", "pin", "Areas"],
   ["checks", "shield", "Checks and safeguards"],
   ["email", "mail", "Email"],
-  ["rules", "book", "Rulebook and history"],
+  ["history", "history", "History"],
 ];
 
 function Switch({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
@@ -33,7 +29,7 @@ export function SettingsView() {
   const ui = useUi();
   const { nav, setNav } = ui;
   // Older links used other names. Ranking now lives in the top bar.
-  const tab = nav.setting === "guard" ? "checks" : nav.setting === "history" ? "rules" : TABS.some((t) => t[0] === nav.setting) ? nav.setting : "areas";
+  const tab = nav.setting === "guard" ? "checks" : TABS.some((t) => t[0] === nav.setting) ? nav.setting : "areas";
   return (
     <div className="stack">
       <div className="seg" style={{ alignSelf: "flex-start", flexWrap: "wrap" }}>
@@ -49,12 +45,7 @@ export function SettingsView() {
         </>
       )}
       {tab === "email" && <EmailTab />}
-      {tab === "rules" && (
-        <>
-          <RulebookTab />
-          <HistoryTab />
-        </>
-      )}
+      {tab === "history" && <HistoryTab />}
     </div>
   );
 }
@@ -118,7 +109,7 @@ function GuardTab() {
     <Card>
       <h3><Ic n="usercheck" />Safeguards: you stay the judge</h3>
       <p className="muted" style={{ marginBottom: 6 }}>The engine recommends. These keep you in control and catch its mistakes early.</p>
-      <SetRow icon="eye" title="Review before any email goes out" sub="Every bulk send opens a list you can edit first."><Switch on label="Always on" onClick={() => {}} /></SetRow>
+      <SetRow icon="eye" title="Review before any email goes out" sub="Every send asks you to confirm first, and every email can be previewed."><Switch on label="Always on" onClick={() => {}} /></SetRow>
       <SetRow icon="shield" title="Spot-check rate" sub="Share of decisions you check each week against the engine.">
         <select className="sel" aria-label="Spot-check rate" value={g.spot} onChange={(e) => ws.setGuard({ spot: Number(e.target.value) })}>{[5, 10, 20].map((v) => <option key={v}>{v}</option>)}</select>
         <span className="muted">%</span>
@@ -129,68 +120,6 @@ function GuardTab() {
         <span className="muted">days</span>
       </SetRow>
     </Card>
-  );
-}
-
-function Num({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  return (
-    <label style={{ display: "block", fontSize: 12.5 }} className="muted">
-      {label}
-      <input type="number" className="search" style={{ maxWidth: "none", marginTop: 4, width: "100%" }} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-    </label>
-  );
-}
-
-function RulebookTab() {
-  const ui = useUi();
-  const { ws } = ui;
-  const config = ws.result?.config ?? DEFAULT_CONFIG;
-  const [draft, setDraft] = useState<EngineConfig>(config);
-  const tiers: Tier[] = ["Tier 1", "Tier 2", "Tier 3"];
-  const changed = JSON.stringify(draft) !== JSON.stringify(config);
-  return (
-    <>
-      <Card>
-        <h3><Ic n="sliders" />Assumptions<span className="sp" /><span className="muted" style={{ fontWeight: 500, fontSize: 12 }}>Every threshold is an assumption you can change</span></h3>
-        <div className="grid g3">
-          {tiers.map((t) => <Num key={t} label={`Minimum investment, ${t} (₹ lakh)`} value={draft.minCapital[t]} onChange={(v) => setDraft({ ...draft, minCapital: { ...draft.minCapital, [t]: v } })} />)}
-          <Num label="“Financing probable” band (%)" value={Math.round(draft.nearMissBand * 100)} onChange={(v) => setDraft({ ...draft, nearMissBand: v / 100 })} />
-          <Num label="Minimum space (sq ft)" value={draft.minSqft} onChange={(v) => setDraft({ ...draft, minSqft: v })} />
-          <Num label="Comfortable space from (sq ft)" value={draft.tightSqft} onChange={(v) => setDraft({ ...draft, tightSqft: v })} />
-        </div>
-        <div className="row wrap" style={{ marginTop: 12, gap: 8 }}>
-          <button className="btn primary" disabled={!changed} onClick={() => { ws.setConfig(draft, "Assumptions changed in Rulebook"); ui.toast("Assumptions applied. Everyone re-checked."); }}>Apply and re-decide</button>
-          <button className="btn ghost" onClick={() => { const d = { ...DEFAULT_CONFIG, weights: config.weights, phaseName: config.phaseName }; setDraft(d); ws.setConfig(d, "Assumptions reset to defaults"); }}>Reset to defaults</button>
-        </div>
-      </Card>
-      <div className="grid g2">
-        {RULES.map((r, i) => (
-          <Card key={r.id} i={i}>
-            <div className="row wrap" style={{ gap: 8, marginBottom: 6 }}><span className="tag mono">{r.gate}</span><b>{r.title}</b></div>
-            <p><b>Rule. </b>{r.rule}</p>
-            <p className="muted" style={{ marginTop: 6 }}><b style={{ color: "var(--ink)" }}>Why. </b>{r.why}</p>
-            {r.assumption && <p className="tag warn" style={{ whiteSpace: "normal", marginTop: 8 }}><span><b>Assumption and how to check it. </b>{r.assumption}</span></p>}
-            <details style={{ marginTop: 8 }}>
-              <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--accent)" }}>Real-world evidence ({r.evidence.length})</summary>
-              <ul className="plain" style={{ marginTop: 8, listStyle: "none", paddingLeft: 0 }}>
-                {r.evidence.map((id) => {
-                  const e = evidenceById(id);
-                  if (!e) return null;
-                  return (
-                    <li key={id} className="card flat" style={{ padding: 10 }}>
-                      <div className="row wrap" style={{ gap: 6 }}><b>{e.company_or_body}</b>{e.figure && <span className="tag">{e.figure}</span>}<span className="tag">{e.confidence} confidence</span></div>
-                      <div className="muted" style={{ fontSize: 12.5 }}>{e.claim}</div>
-                      <a className="lnk" href={e.url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>{e.source_title} ↗</a>
-                    </li>
-                  );
-                })}
-              </ul>
-            </details>
-          </Card>
-        ))}
-      </div>
-      <span className="muted" style={{ fontSize: 12 }}>{EVIDENCE.length} evidence cards back these rules.</span>
-    </>
   );
 }
 

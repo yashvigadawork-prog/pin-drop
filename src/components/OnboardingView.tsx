@@ -1,6 +1,8 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { demoMail, parseEml, parsePasted } from "@/lib/desk/inbox";
+import { useRef, useState } from "react";
 import { Checklist, Gantt } from "./Checklist";
 import { Ic } from "./Icon";
 import { BucketIcon, Card, Empty, Ring, useUi } from "./kit";
@@ -33,7 +35,7 @@ export function OnboardingView() {
           const fl = Object.values(rec.chk).filter((v) => v === "flag").length;
           return (
             <button key={pid} className="card hov rise row" style={{ "--i": i, gap: 12, textAlign: "left", padding: 12, ...(pid === id ? { borderColor: "var(--accent)" } : {}) } as CSSProperties} onClick={() => setNav({ onb: pid })}>
-              <Ring v={(rec.stage / 12) * 100} size={44} sw={5} />
+              <Ring v={(rec.stage / 12) * 100} size={48} sw={5} pct />
               <div style={{ minWidth: 0 }}>
                 <b>{r.app.name}</b>
                 <div className="muted" style={{ fontSize: 12 }}>{STAGES[rec.stage]} · {r.slotPin ?? r.app.pin}</div>
@@ -46,7 +48,7 @@ export function OnboardingView() {
       <div className="stack">
         <Card>
           <div className="row wrap" style={{ gap: 14 }}>
-            <Ring v={prog} size={64} sw={7} />
+            <Ring v={prog} size={72} sw={7} pct />
             <div style={{ flex: 1, minWidth: 160 }}>
               <h3 style={{ margin: 0, fontSize: 20 }}>{row.app.name}</h3>
               <div className="muted">{row.app.city ?? row.app.cityRaw} · pin {row.slotPin ?? row.app.pin}{d.plan ? ` · opens ${d.plan.plannedOpen}` : ""}</div>
@@ -79,9 +81,11 @@ export function OnboardingView() {
           </div>
         </Card>
 
+        <PartnerInbox id={id} name={row.app.name} />
+
         <Card i={1}>
           <h3><Ic n="shield" />Checks<span className="sp" /><span className="muted" style={{ fontWeight: 500, fontSize: 12 }}>Groups can be switched off in Rules and settings</span></h3>
-          <Checklist o={o} mods={desk.mods} interactive id={id} onCycle={(k) => ws.cycleCheck(id, k)} onRemind={() => ui.toast(`Reminder sent to ${row.app.name.split(" ")[0]}`)} />
+          <Checklist o={o} mods={desk.mods} interactive id={id} onCycle={(k) => ws.cycleCheck(id, k)} onSet={(k, st) => ws.setCheck(id, k, st)} onRemind={() => ui.toast(`Reminder sent to ${row.app.name.split(" ")[0]}`)} />
         </Card>
 
         {desk.mods.sup && (
@@ -110,5 +114,54 @@ export function OnboardingView() {
         </Card>
       </div>
     </div>
+  );
+}
+
+// Partner emails go in here. The app finds the documents and marks them "for your review".
+function PartnerInbox({ id, name }: { id: string; name: string }) {
+  const ui = useUi();
+  const { ws } = ui;
+  const file = useRef<HTMLInputElement>(null);
+  const [paste, setPaste] = useState("");
+  const [open, setOpen] = useState(false);
+  const review = Object.entries(ws.desk.onb[id]?.docs ?? {}).filter(([k]) => ws.desk.onb[id].chk[k] === "received").length;
+  const done = (labels: string[]) => {
+    if (!labels.length) ui.toast("No new documents found. They may already be verified.");
+    else ui.toast(`Found ${labels.join(", ")}. Ready for your review`);
+  };
+  const onFile = async (f: File) => {
+    const text = await f.text();
+    done(ws.receiveEmail(id, f.name.toLowerCase().endsWith(".eml") ? parseEml(text) : parsePasted(text)));
+  };
+  return (
+    <Card i={1} data-s={review ? "info" : undefined}>
+      <h3>
+        <Ic n="inbox" />Partner emails
+        <span className="sp" />
+        <span className={`tag${review ? " warn" : ""}`}>{review ? `${review} document${review === 1 ? "" : "s"} for your review` : "Nothing waiting"}</span>
+      </h3>
+      <p className="muted" style={{ margin: 0 }}>When {name.split(" ")[0]} emails documents, add the email here. We find the documents, show them for review, and you click Verify. No more digging through your inbox.</p>
+      <div className="row wrap" style={{ gap: 8, marginTop: 10 }}>
+        <input ref={file} type="file" accept=".eml,.txt" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
+        <button className="btn primary" onClick={() => file.current?.click()}><Ic n="upload" />Add an email (.eml)</button>
+        <button className="btn" onClick={() => setOpen(!open)}><Ic n="edit" />Paste an email</button>
+        <button className="btn" title="Demo only: adds a sample email with two attachments" onClick={() => {
+          const o = ws.desk.onb[id];
+          const owed = CHECK_GROUPS.filter((g) => ws.desk.mods[g.mod]).flatMap((g) => g.items.map((it) => it[0])).filter((k) => o && (o.chk[k] === "todo" || o.chk[k] === "asked"));
+          if (!owed.length) ui.toast("This partner owes no more documents");
+          else done(ws.receiveEmail(id, demoMail(name, owed)));
+        }}><Ic n="zap" />Demo: partner emails documents</button>
+      </div>
+      {open && (
+        <div className="stack" style={{ gap: 8, marginTop: 10 }}>
+          <textarea className="paste" aria-label="Paste the email" placeholder={"From: Name <name@email.com>\nSubject: Documents\nAttachments: PAN_card.pdf, Bank_statement.pdf\n\nPlease find my PAN card attached."} value={paste} onChange={(e) => setPaste(e.target.value)} />
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn primary" disabled={!paste.trim()} onClick={() => { done(ws.receiveEmail(id, parsePasted(paste))); setPaste(""); setOpen(false); }}>Find documents</button>
+            <span className="muted" style={{ fontSize: 12.5 }}>Tip: list attachment names on an “Attachments:” line.</span>
+          </div>
+        </div>
+      )}
+      <p className="muted" style={{ margin: "10px 0 0", fontSize: 12 }}>Reading a live inbox automatically needs a Google or Outlook connection. For now, drop the email in, or forward it and download as .eml.</p>
+    </Card>
   );
 }
