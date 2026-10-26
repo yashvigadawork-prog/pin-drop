@@ -236,7 +236,7 @@ textarea.paste:focus { border-color: var(--accent); }
 .cdot { transition: r .2s; }
 
 /* landing */
-.landing { height: 100%; overflow: auto; position: relative; z-index: 1; }
+.landing { flex: 1; min-width: 0; height: 100%; overflow: auto; position: relative; z-index: 1; }
 .lwrap { max-width: 1180px; margin: 0 auto; padding: 22px max(18px, env(safe-area-inset-left, 0px)) 60px; display: flex; flex-direction: column; gap: 34px; }
 .lhero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 30px; align-items: center; }
 .lhero h1 { font-size: clamp(34px, 5.4vw, 62px); line-height: 1.02; }
